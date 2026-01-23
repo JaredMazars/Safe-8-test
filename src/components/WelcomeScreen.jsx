@@ -99,10 +99,10 @@ const WelcomeScreen = ({
             
             {userData ? (
               <div className="user-info-banner">
-                <i className="fas fa-user-circle" style={{ fontSize: '2rem' }}></i>
-                <div>
-                  <div style={{ fontWeight: '600', fontSize: '1rem' }}>{userData.contact_name || userData.contactName}</div>
-                  <div style={{ fontSize: '0.875rem', opacity: '0.9' }}>{userData.company_name || userData.companyName}</div>
+                <i className="fas fa-user-circle"></i>
+                <div className="user-info-text">
+                  <div className="user-info-name">{userData.contact_name || userData.contactName}</div>
+                  <div className="user-info-company">{userData.company_name || userData.companyName}</div>
                 </div>
                 <button
                   onClick={() => navigate('/dashboard')}
