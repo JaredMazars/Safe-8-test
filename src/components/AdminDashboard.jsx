@@ -52,7 +52,7 @@ const AdminDashboard = () => {
 
   const ASSESSMENT_TYPES = ['CORE', 'ADVANCED', 'FRONTIER'];
   const PILLARS = ['Strategy', 'Architecture', 'Foundation', 'Ethics', 'Culture', 'Capability', 'Governance', 'Performance'];
-  const ACTION_TYPES = ['CREATE', 'UPDATE', 'DELETE', 'VIEW', 'LOGIN'];
+  const ACTION_TYPES = ['CREATE', 'UPDATE', 'DELETE', 'VIEW', 'LOGIN', 'ASSESSMENT_START', 'ASSESSMENT_COMPLETE', 'ASSESSMENT_UPDATE'];
   const ENTITY_TYPES = ['admin', 'user', 'question', 'assessment'];
 
   useEffect(() => {
@@ -259,12 +259,12 @@ const AdminDashboard = () => {
 
   const handleViewAssessment = async (assessmentId) => {
     try {
-      const response = await api.get(`/api/assessments/${assessmentId}`);
+      const response = await api.get(`/api/admin/assessments/${assessmentId}`);
       setSelectedAssessment(response.data.assessment);
       setShowAssessmentModal(true);
     } catch (err) {
       console.error('Error loading assessment details:', err);
-      alert('Failed to load assessment details');
+      alert('Failed to load assessment details: ' + (err.response?.data?.message || err.message));
     }
   };
 
@@ -745,8 +745,8 @@ const AdminDashboard = () => {
                               </td>
                               <td className="question-text-cell">{question.question_text}</td>
                               <td>
-                                <span className={`status-badge ${question.is_active ? 'status-active' : 'status-inactive'}`}>
-                                  {question.is_active ? 'Active' : 'Inactive'}
+                                <span className={`status-badge ${question.is_active === 1 || question.is_active === true ? 'status-active' : 'status-inactive'}`}>
+                                  {question.is_active === 1 || question.is_active === true ? 'Active' : 'Inactive'}
                                 </span>
                               </td>
                               <td>
@@ -960,7 +960,8 @@ const AdminDashboard = () => {
                       <thead>
                         <tr>
                           <th>Timestamp</th>
-                          <th>Admin</th>
+                          <th>User/Admin</th>
+                          <th>Type</th>
                           <th>Action</th>
                           <th>Entity</th>
                           <th>Description</th>
@@ -970,7 +971,7 @@ const AdminDashboard = () => {
                       <tbody>
                         {activityLogs.length === 0 ? (
                           <tr>
-                            <td colSpan="6" className="admin-table-empty">
+                            <td colSpan="7" className="admin-table-empty">
                               No activity logs found
                             </td>
                           </tr>
@@ -978,7 +979,19 @@ const AdminDashboard = () => {
                           activityLogs.map((log) => (
                             <tr key={log.id}>
                               <td>{formatDate(log.created_at)}</td>
-                              <td>{log.admin_username || 'Unknown'}</td>
+                              <td>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                  <span style={{ fontWeight: '600' }}>{log.actor_name || 'Unknown'}</span>
+                                  {log.company_name && (
+                                    <span style={{ fontSize: '0.85em', color: '#6c757d' }}>{log.company_name}</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td>
+                                <span className={`actor-type-badge actor-${log.actor_type}`}>
+                                  {log.actor_type === 'admin' ? '👤 Admin' : '👥 User'}
+                                </span>
+                              </td>
                               <td>
                                 <span className={`action-badge action-${log.action_type.toLowerCase()}`}>
                                   {log.action_type}

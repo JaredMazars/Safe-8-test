@@ -22,15 +22,8 @@ const WelcomeScreen = ({
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
 
-    const emailRegex = /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,255}\.[A-Za-z]{2,}$/;
-
     if (!loginEmail.trim()) {
-      setLoginError('Please enter your email address');
-      return;
-    }
-
-    if (!emailRegex.test(loginEmail)) {
-      setLoginError('Please enter a valid email address');
+      setLoginError('Please enter your email or username');
       return;
     }
 
@@ -43,35 +36,80 @@ const WelcomeScreen = ({
     setLoginError('');
 
     try {
-      const response = await api.post('/api/lead/login', {
-        email: loginEmail,
-        password: loginPassword
-      });
+      // First, try admin login
+      try {
+        const adminResponse = await api.post('/api/admin/login', {
+          username: loginEmail,
+          password: loginPassword
+        });
 
-      if (response.data.success) {
-        onLogin(response.data);
-        setLoginEmail('');
-        setLoginPassword('');
-        setShowLoginForm(false);
-      } else {
-        setLoginError(response.data.message || 'Login failed');
+        if (adminResponse.data.success) {
+          // Admin login successful
+          localStorage.setItem('adminToken', adminResponse.data.sessionToken);
+          const { password_hash, ...safeAdminData } = adminResponse.data.admin;
+          localStorage.setItem('adminUser', JSON.stringify(safeAdminData));
+          
+          console.log('✅ Admin logged in successfully');
+          setLoginEmail('');
+          setLoginPassword('');
+          setShowLoginForm(false);
+          navigate('/admin/dashboard');
+          return;
+        }
+      } catch (adminError) {
+        // If admin login fails with 401 (invalid credentials), try user login
+        if (adminError.response?.status === 401 || adminError.response?.status === 404) {
+          // Try user login
+          const emailRegex = /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,255}\.[A-Za-z]{2,}$/;
+          
+          if (!emailRegex.test(loginEmail)) {
+            setLoginError('Invalid credentials');
+            setIsLoggingIn(false);
+            return;
+          }
+
+          try {
+            const userResponse = await api.post('/api/lead/login', {
+              email: loginEmail,
+              password: loginPassword
+            });
+
+            if (userResponse.data.success) {
+              onLogin(userResponse.data);
+              setLoginEmail('');
+              setLoginPassword('');
+              setShowLoginForm(false);
+              return;
+            }
+          } catch (userError) {
+            // Handle user login errors
+            if (userError.response?.status === 404) {
+              setLoginError('Invalid credentials');
+            } else if (userError.response?.status === 401) {
+              const attemptsRemaining = userError.response.data?.attemptsRemaining;
+              if (attemptsRemaining) {
+                setLoginError(`Invalid password. ${attemptsRemaining} attempts remaining.`);
+              } else {
+                setLoginError('Invalid credentials');
+              }
+            } else if (userError.response?.status === 423) {
+              setLoginError('Account locked due to too many failed attempts. Please try again later.');
+            } else {
+              setLoginError('Invalid credentials');
+            }
+            return;
+          }
+        } else if (adminError.response?.status === 423) {
+          setLoginError('Account locked due to too many failed attempts. Please try again later.');
+          return;
+        } else {
+          setLoginError('Login failed. Please try again.');
+          return;
+        }
       }
     } catch (error) {
       console.error('Login error:', error);
-      if (error.response?.status === 404) {
-        setLoginError('No account found with this email address');
-      } else if (error.response?.status === 401) {
-        const attemptsRemaining = error.response.data?.attemptsRemaining;
-        if (attemptsRemaining) {
-          setLoginError(`Invalid password. ${attemptsRemaining} attempts remaining.`);
-        } else {
-          setLoginError('Invalid password');
-        }
-      } else if (error.response?.status === 423) {
-        setLoginError('Account locked due to too many failed attempts. Please try again later.');
-      } else {
-        setLoginError('Login failed. Please try again.');
-      }
+      setLoginError('Login failed. Please try again.');
     } finally {
       setIsLoggingIn(false);
     }
@@ -88,15 +126,6 @@ const WelcomeScreen = ({
             className="welcome-logo"
           />
           <div className="header-actions">
-            <button
-              onClick={() => navigate('/admin/login')}
-              className="btn-admin"
-              title="Admin Portal"
-            >
-              <i className="fas fa-user-shield"></i>
-              <span>Admin Portal</span>
-            </button>
-            
             {userData ? (
               <div className="user-info-banner">
                 <i className="fas fa-user-circle"></i>
@@ -139,13 +168,13 @@ const WelcomeScreen = ({
               <form onSubmit={handleLoginSubmit} className="login-form">
                 <div className="form-group">
                   <input
-                    type="email"
+                    type="text"
                     value={loginEmail}
                     onChange={(e) => {
                       setLoginEmail(e.target.value);
                       setLoginError('');
                     }}
-                    placeholder="Email address"
+                    placeholder="Email or Username"
                     className="login-input"
                     disabled={isLoggingIn}
                   />
@@ -335,9 +364,6 @@ const WelcomeScreen = ({
               </p>
             </div>
           )}
-          
-          {/* Admin Portal Link */}
-          <AdminPortalLink />
         </main>
       </div>
     </div>
@@ -380,36 +406,6 @@ const AssessmentCard = ({
           {audience}
         </span>
       </div>
-    </div>
-  );
-};
-
-// Add admin link at the bottom of the page
-const AdminPortalLink = () => {
-  return (
-    <div style={{
-      textAlign: 'center',
-      marginTop: '3rem',
-      paddingTop: '2rem',
-      borderTop: '1px solid var(--medium-gray)'
-    }}>
-      <a 
-        href="/admin/login"
-        style={{
-          color: 'var(--text-light)',
-          fontSize: '0.875rem',
-          textDecoration: 'none',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '0.5rem',
-          transition: 'color 0.2s'
-        }}
-        onMouseEnter={(e) => e.target.style.color = 'var(--secondary-blue)'}
-        onMouseLeave={(e) => e.target.style.color = 'var(--text-light)'}
-      >
-        <i className="fas fa-shield-alt"></i>
-        Admin Portal
-      </a>
     </div>
   );
 };

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import Lead from '../models/Lead.js';
+import UserActivity from '../models/UserActivity.js';
 import database from '../config/database.js';
 import { validateLeadForm, validateLeadLogin } from '../middleware/validation.js';
 import { sendWelcomeEmail, sendPasswordResetEmail } from '../services/emailService.js';
@@ -284,6 +285,17 @@ leadRouter.post('/login', validateLeadLogin, async (req, res) => {
 
     const user = verifyResult.lead;
     logger.info('Login successful', { contactName: user.contact_name });
+
+    // Log user activity
+    await UserActivity.log(
+      user.id,
+      'LOGIN',
+      'user',
+      user.id,
+      `${user.contact_name} logged in`,
+      req.ip || req.connection.remoteAddress,
+      req.headers['user-agent']
+    );
 
     // Get all assessments for this user
     const assessmentsQuery = `

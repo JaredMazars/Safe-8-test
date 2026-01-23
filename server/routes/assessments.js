@@ -2,6 +2,7 @@ import { Router } from 'express';
 import sql from 'mssql';
 import database from '../config/database.js';
 import Assessment from '../models/Assessment.js';
+import UserActivity from '../models/UserActivity.js';
 import logger from '../utils/logger.js';
 import { cache, cacheMiddleware } from '../config/redis.js';
 import { doubleCsrfProtection } from '../middleware/csrf.js';
@@ -64,6 +65,31 @@ assessmentRouter.post('/submit-complete', async (req, res) => {
     
     if (result.success) {
       console.log(`✅ Assessment ${result.isNew ? 'created' : 'updated'} successfully`);
+      
+      // Log user activity - both start and completion
+      if (result.isNew) {
+        // Log assessment start
+        await UserActivity.log(
+          parseInt(lead_id),
+          'ASSESSMENT_START',
+          'assessment',
+          result.assessmentId,
+          `Started ${assessment_type} assessment`,
+          req.ip || req.connection.remoteAddress,
+          req.headers['user-agent']
+        );
+      }
+      
+      // Log assessment completion/update
+      await UserActivity.log(
+        parseInt(lead_id),
+        result.isNew ? 'ASSESSMENT_COMPLETE' : 'ASSESSMENT_UPDATE',
+        'assessment',
+        result.assessmentId,
+        `Completed ${assessment_type} assessment with score ${overall_score.toFixed(1)}%`,
+        req.ip || req.connection.remoteAddress,
+        req.headers['user-agent']
+      );
       
       res.json({
         success: true,

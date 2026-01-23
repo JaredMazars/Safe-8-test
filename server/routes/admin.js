@@ -769,49 +769,82 @@ router.get('/activity-logs/detailed', authenticateAdmin, async (req, res) => {
     const { limit = 50, page = 1, action_type, entity_type } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
     
-    // Build WHERE clause
-    let whereClause = 'WHERE 1=1';
+    // Build WHERE clause for admin logs
+    let adminWhereClause = '1=1';
+    let userWhereClause = '1=1';
     
     if (action_type && action_type !== 'all') {
-      whereClause += ` AND aal.action_type = '${action_type.replace(/'/g, "''")}'`;
+      const escapedAction = action_type.replace(/'/g, "''");
+      adminWhereClause += ` AND aal.action_type = '${escapedAction}'`;
+      userWhereClause += ` AND ual.action_type = '${escapedAction}'`;
     }
     
     if (entity_type && entity_type !== 'all') {
-      whereClause += ` AND aal.entity_type = '${entity_type.replace(/'/g, "''")}'`;
+      const escapedEntity = entity_type.replace(/'/g, "''");
+      adminWhereClause += ` AND aal.entity_type = '${escapedEntity}'`;
+      userWhereClause += ` AND ual.entity_type = '${escapedEntity}'`;
     }
     
-    // Get total count
-    const countSql = `
-      SELECT COUNT(*) as total
-      FROM admin_activity_log aal
-      ${whereClause}
-    `;
-    const countResult = await database.query(countSql);
-    const total = Array.isArray(countResult) ? countResult[0].total : countResult.recordset[0].total;
-    
-    // Get logs
+    // Get combined logs from both admin and user activity tables
     const sql = `
-      SELECT 
-        aal.id,
-        aal.admin_id,
-        au.username as admin_username,
-        au.full_name as admin_name,
-        aal.action_type,
-        aal.entity_type,
-        aal.entity_id,
-        aal.description,
-        aal.ip_address,
-        aal.user_agent,
-        aal.created_at
-      FROM admin_activity_log aal
-      LEFT JOIN admin_users au ON aal.admin_id = au.id
-      ${whereClause}
-      ORDER BY aal.created_at DESC
+      WITH CombinedLogs AS (
+        SELECT
+          'admin' as actor_type,
+          aal.id,
+          au.username as actor_name,
+          au.full_name as actor_full_name,
+          au.email as actor_email,
+          CAST(NULL AS NVARCHAR(255)) as company_name,
+          aal.action_type,
+          aal.entity_type,
+          aal.entity_id,
+          aal.description,
+          aal.ip_address,
+          aal.user_agent,
+          aal.created_at
+        FROM dbo.admin_activity_log aal
+        LEFT JOIN dbo.admin_users au ON aal.admin_id = au.id
+        WHERE ${adminWhereClause}
+        
+        UNION ALL
+        
+        SELECT
+          'user' as actor_type,
+          ual.id,
+          l.contact_name as actor_name,
+          l.contact_name as actor_full_name,
+          l.email as actor_email,
+          l.company_name,
+          ual.action_type,
+          ual.entity_type,
+          CAST(ual.entity_id AS NVARCHAR(50)) as entity_id,
+          ual.description,
+          ual.ip_address,
+          ual.user_agent,
+          ual.created_at
+        FROM dbo.user_activity_log ual
+        INNER JOIN dbo.leads l ON ual.lead_id = l.id
+        WHERE ${userWhereClause}
+      )
+      SELECT *
+      FROM CombinedLogs
+      ORDER BY created_at DESC
       OFFSET ${offset} ROWS FETCH NEXT ${parseInt(limit)} ROWS ONLY
     `;
     
     const result = await database.query(sql);
     const logs = Array.isArray(result) ? result : result.recordset;
+    
+    // Get total count
+    const countSql = `
+      SELECT COUNT(*) as total FROM (
+        SELECT id FROM dbo.admin_activity_log aal WHERE ${adminWhereClause}
+        UNION ALL
+        SELECT id FROM dbo.user_activity_log ual WHERE ${userWhereClause}
+      ) combined
+    `;
+    const countResult = await database.query(countSql);
+    const total = Array.isArray(countResult) ? countResult[0].total : countResult.recordset[0].total;
     
     console.log(`✅ Found ${logs.length} activity logs (Total: ${total})`);
     
@@ -1221,6 +1254,48 @@ router.get('/assessments', authenticateAdmin, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching assessments'
+    });
+  }
+});
+
+// Get single assessment by ID
+router.get('/assessments/:assessmentId', authenticateAdmin, async (req, res) => {
+  try {
+    const { assessmentId } = req.params;
+    const id = parseInt(assessmentId);
+
+    const sql = `
+      SELECT 
+        a.*,
+        l.contact_name as user_name,
+        l.email as user_email,
+        l.company_name
+      FROM assessments a
+      LEFT JOIN leads l ON a.lead_id = l.id
+      WHERE a.id = @param1
+    `;
+    
+    const result = await database.query(sql, [id]);
+    const assessment = Array.isArray(result) ? result[0] : result.recordset[0];
+    
+    if (!assessment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assessment not found'
+      });
+    }
+
+    console.log('✅ Loaded assessment details:', assessmentId);
+
+    res.json({
+      success: true,
+      assessment: assessment
+    });
+  } catch (error) {
+    console.error('❌ Error getting assessment details:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching assessment details'
     });
   }
 });
