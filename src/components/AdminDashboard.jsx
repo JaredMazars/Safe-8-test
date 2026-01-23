@@ -50,8 +50,19 @@ const AdminDashboard = () => {
   const [activityActionFilter, setActivityActionFilter] = useState('all');
   const [activityEntityFilter, setActivityEntityFilter] = useState('all');
 
-  const ASSESSMENT_TYPES = ['CORE', 'ADVANCED', 'FRONTIER'];
-  const PILLARS = ['Strategy', 'Architecture', 'Foundation', 'Ethics', 'Culture', 'Capability', 'Governance', 'Performance'];
+  // Configuration Tab
+  const [configLoading, setConfigLoading] = useState(false);
+  const [assessmentTypes, setAssessmentTypes] = useState([]);
+  const [industries, setIndustries] = useState([]);
+  const [newAssessmentType, setNewAssessmentType] = useState('');
+  const [newAssessmentDescription, setNewAssessmentDescription] = useState('');
+  const [newIndustry, setNewIndustry] = useState('');
+  const [editingIndustry, setEditingIndustry] = useState(null);
+  const [editingAssessmentType, setEditingAssessmentType] = useState(null);
+  const [pillars, setPillars] = useState([]);
+  const [newPillar, setNewPillar] = useState({ name: '', short_name: '' });
+  const [editingPillar, setEditingPillar] = useState(null);
+
   const ACTION_TYPES = ['CREATE', 'UPDATE', 'DELETE', 'VIEW', 'LOGIN', 'ASSESSMENT_START', 'ASSESSMENT_COMPLETE', 'ASSESSMENT_UPDATE'];
   const ENTITY_TYPES = ['admin', 'user', 'question', 'assessment'];
 
@@ -75,6 +86,8 @@ const AdminDashboard = () => {
       loadAssessments(1);
     } else if (activeTab === 'activity') {
       loadActivityLogs(1);
+    } else if (activeTab === 'config') {
+      loadConfiguration();
     }
   }, [activeTab, questionTypeFilter, questionPillarFilter, assessmentTypeFilter, activityActionFilter, activityEntityFilter]);
 
@@ -340,6 +353,198 @@ const AdminDashboard = () => {
     return 'score-needs-focus';
   };
 
+  // ========== Configuration Management ==========
+  const loadConfiguration = async () => {
+    setConfigLoading(true);
+    try {
+      const [typesResponse, industriesResponse, pillarsResponse] = await Promise.all([
+        api.get('/api/admin/config/assessment-types'),
+        api.get('/api/admin/config/industries'),
+        api.get('/api/admin/config/pillars')
+      ]);
+
+      if (typesResponse.data.success) {
+        setAssessmentTypes(typesResponse.data.assessmentTypes);
+      }
+
+      if (industriesResponse.data.success) {
+        setIndustries(industriesResponse.data.industries);
+      }
+
+      if (pillarsResponse.data.success) {
+        setPillars(pillarsResponse.data.pillars);
+      }
+    } catch (error) {
+      console.error('Error loading configuration:', error);
+      setError('Failed to load configuration');
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
+  const handleCreateAssessmentType = async (e) => {
+    e.preventDefault();
+    if (!newAssessmentType.trim()) return;
+
+    try {
+      const response = await api.post('/api/admin/config/assessment-types', {
+        assessment_type: newAssessmentType.trim(),
+        description: newAssessmentDescription.trim()
+      });
+
+      if (response.data.success) {
+        alert('Assessment type created successfully! You can now add questions for this type.');
+        setNewAssessmentType('');
+        setNewAssessmentDescription('');
+        loadConfiguration();
+      }
+    } catch (error) {
+      console.error('Error creating assessment type:', error);
+      alert(error.response?.data?.message || 'Failed to create assessment type');
+    }
+  };
+
+  const handleCreateIndustry = async (e) => {
+    e.preventDefault();
+    if (!newIndustry.trim()) return;
+
+    try {
+      const response = await api.post('/api/admin/config/industries', {
+        name: newIndustry.trim()
+      });
+
+      if (response.data.success) {
+        alert('Industry created successfully!');
+        setNewIndustry('');
+        loadConfiguration();
+      }
+    } catch (error) {
+      console.error('Error creating industry:', error);
+      alert(error.response?.data?.message || 'Failed to create industry');
+    }
+  };
+
+  const handleUpdateIndustry = async (industryId, updates) => {
+    try {
+      const response = await api.put(`/api/admin/config/industries/${industryId}`, updates);
+
+      if (response.data.success) {
+        alert('Industry updated successfully!');
+        setEditingIndustry(null);
+        loadConfiguration();
+      }
+    } catch (error) {
+      console.error('Error updating industry:', error);
+      alert(error.response?.data?.message || 'Failed to update industry');
+    }
+  };
+
+  const handleDeleteIndustry = async (industryId, industryName) => {
+    if (!confirm(`Are you sure you want to delete the industry "${industryName}"?`)) return;
+
+    try {
+      const response = await api.delete(`/api/admin/config/industries/${industryId}`);
+
+      if (response.data.success) {
+        alert('Industry deleted successfully!');
+        loadConfiguration();
+      }
+    } catch (error) {
+      console.error('Error deleting industry:', error);
+      alert(error.response?.data?.message || 'Failed to delete industry');
+    }
+  };
+
+  const handleUpdateAssessmentType = async (oldType, newType) => {
+    if (!newType || newType === oldType) {
+      setEditingAssessmentType(null);
+      return;
+    }
+
+    try {
+      const response = await api.put(`/api/admin/config/assessment-types/${oldType}`, {
+        new_type: newType
+      });
+
+      if (response.data.success) {
+        alert('Assessment type updated successfully!');
+        setEditingAssessmentType(null);
+        loadConfiguration();
+      }
+    } catch (error) {
+      console.error('Error updating assessment type:', error);
+      alert(error.response?.data?.message || 'Failed to update assessment type');
+    }
+  };
+
+  const handleDeleteAssessmentType = async (assessmentType) => {
+    if (!confirm(`Are you sure you want to delete the assessment type "${assessmentType}"?\n\nThis will deactivate all questions associated with this type.`)) return;
+
+    try {
+      const response = await api.delete(`/api/admin/config/assessment-types/${assessmentType}`);
+
+      if (response.data.success) {
+        alert('Assessment type deleted successfully! All associated questions have been deactivated.');
+        loadConfiguration();
+      }
+    } catch (error) {
+      console.error('Error deleting assessment type:', error);
+      alert(error.response?.data?.message || 'Failed to delete assessment type');
+    }
+  };
+
+  const handleCreatePillar = async (e) => {
+    e.preventDefault();
+    if (!newPillar.name.trim() || !newPillar.short_name.trim()) return;
+
+    try {
+      const response = await api.post('/api/admin/config/pillars', {
+        name: newPillar.name.trim(),
+        short_name: newPillar.short_name.trim().toUpperCase()
+      });
+
+      if (response.data.success) {
+        alert('Pillar created successfully!');
+        setNewPillar({ name: '', short_name: '' });
+        loadConfiguration();
+      }
+    } catch (error) {
+      console.error('Error creating pillar:', error);
+      alert(error.response?.data?.message || 'Failed to create pillar');
+    }
+  };
+
+  const handleUpdatePillar = async (pillarId, updates) => {
+    try {
+      const response = await api.put(`/api/admin/config/pillars/${pillarId}`, updates);
+
+      if (response.data.success) {
+        alert('Pillar updated successfully!');
+        setEditingPillar(null);
+        loadConfiguration();
+      }
+    } catch (error) {
+      console.error('Error updating pillar:', error);
+      alert(error.response?.data?.message || 'Failed to update pillar');
+    }
+  };
+
+  const handleDeletePillar = async (pillarId, pillarName) => {
+    if (!confirm(`Are you sure you want to delete the pillar "${pillarName}"?\n\nThis will affect all questions using this pillar.`)) return;
+
+    try {
+      const response = await api.delete(`/api/admin/config/pillars/${pillarId}`);
+
+      if (response.data.success) {
+        alert('Pillar deleted successfully!');
+        loadConfiguration();
+      }
+    } catch (error) {
+      console.error('Error deleting pillar:', error);
+      alert(error.response?.data?.message || 'Failed to delete pillar');
+    }
+  };
+
   // ========== Render Loading State ==========
   if (loading) {
     return (
@@ -432,6 +637,12 @@ const AdminDashboard = () => {
               onClick={() => setActiveTab('activity')}
             >
               <i className="fas fa-history"></i> Activity Log
+            </button>
+            <button
+              className={`admin-tab ${activeTab === 'config' ? 'active' : ''}`}
+              onClick={() => setActiveTab('config')}
+            >
+              <i className="fas fa-cog"></i> Configuration
             </button>
           </div>
         </div>
@@ -669,7 +880,7 @@ const AdminDashboard = () => {
                   className="admin-select"
                 >
                   <option value="all">All Types</option>
-                  {ASSESSMENT_TYPES.map(type => (
+                  {assessmentTypes.map(type => (
                     <option key={type} value={type}>{type}</option>
                   ))}
                 </select>
@@ -680,8 +891,8 @@ const AdminDashboard = () => {
                   className="admin-select"
                 >
                   <option value="all">All Pillars</option>
-                  {PILLARS.map(pillar => (
-                    <option key={pillar} value={pillar}>{pillar}</option>
+                  {pillars.map(pillar => (
+                    <option key={pillar.name || pillar} value={pillar.name || pillar}>{pillar.name || pillar}</option>
                   ))}
                 </select>
               </div>
@@ -816,7 +1027,7 @@ const AdminDashboard = () => {
                   className="admin-select"
                 >
                   <option value="all">All Types</option>
-                  {ASSESSMENT_TYPES.map(type => (
+                  {assessmentTypes.map(type => (
                     <option key={type} value={type}>{type}</option>
                   ))}
                 </select>
@@ -1034,6 +1245,358 @@ const AdminDashboard = () => {
               )}
             </div>
           )}
+
+          {/* Configuration Tab */}
+          {activeTab === 'config' && (
+            <div className="tab-content">
+              <div className="section-header">
+                <h2>
+                  <i className="fas fa-cog"></i> Configuration Management
+                </h2>
+              </div>
+
+              {configLoading ? (
+                <div className="loading-state">
+                  <i className="fas fa-spinner fa-spin"></i>
+                  <p>Loading configuration...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Assessment Types Section */}
+                  <div className="config-section">
+                    <div className="section-header">
+                      <h3><i className="fas fa-clipboard-list"></i> Assessment Types</h3>
+                    </div>
+                    
+                    <div className="config-grid">
+                      <div className="config-card">
+                        <h4>Current Assessment Types</h4>
+                        <div className="assessment-types-list">
+                          {assessmentTypes.map(type => (
+                            <div key={type} className="assessment-type-item">
+                              {editingAssessmentType === type ? (
+                                <div className="edit-assessment-type">
+                                  <input
+                                    type="text"
+                                    defaultValue={type}
+                                    onBlur={(e) => {
+                                      if (e.target.value !== type) {
+                                        handleUpdateAssessmentType(type, e.target.value);
+                                      } else {
+                                        setEditingAssessmentType(null);
+                                      }
+                                    }}
+                                    onKeyPress={(e) => {
+                                      if (e.key === 'Enter') {
+                                        handleUpdateAssessmentType(type, e.target.value);
+                                      }
+                                    }}
+                                    autoFocus
+                                  />
+                                </div>
+                              ) : (
+                                <>
+                                  <span className={`type-badge type-${type.toLowerCase()}`}>
+                                    {type}
+                                  </span>
+                                  <div className="assessment-type-actions">
+                                    <button
+                                      onClick={() => setEditingAssessmentType(type)}
+                                      className="btn-icon"
+                                      title="Edit"
+                                    >
+                                      <i className="fas fa-edit"></i>
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteAssessmentType(type)}
+                                      className="btn-icon btn-danger"
+                                      title="Delete"
+                                    >
+                                      <i className="fas fa-trash"></i>
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        {assessmentTypes.length === 0 && (
+                          <p className="no-data">No assessment types found</p>
+                        )}
+                      </div>
+
+                      <div className="config-card">
+                        <h4>Create New Assessment Type</h4>
+                        <form onSubmit={handleCreateAssessmentType} className="config-form">
+                          <div className="form-group">
+                            <label>Assessment Type Name *</label>
+                            <input
+                              type="text"
+                              value={newAssessmentType}
+                              onChange={(e) => setNewAssessmentType(e.target.value)}
+                              placeholder="e.g., EXPERT, BASIC, etc."
+                              required
+                            />
+                            <small>Use uppercase letters (will be converted automatically)</small>
+                          </div>
+                          <div className="form-group">
+                            <label>Initial Question (optional)</label>
+                            <textarea
+                              value={newAssessmentDescription}
+                              onChange={(e) => setNewAssessmentDescription(e.target.value)}
+                              placeholder="Enter a sample question for this assessment type..."
+                              rows="3"
+                            />
+                          </div>
+                          <button type="submit" className="btn-primary">
+                            <i className="fas fa-plus"></i> Create Assessment Type
+                          </button>
+                        </form>
+                        <div className="info-box">
+                          <i className="fas fa-info-circle"></i>
+                          <p>After creating a new assessment type, you can add questions for it in the Questions tab.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Industries Section */}
+                  <div className="config-section">
+                    <div className="section-header">
+                      <h3><i className="fas fa-industry"></i> Industries</h3>
+                    </div>
+
+                    <div className="config-grid">
+                      <div className="config-card">
+                        <h4>Manage Industries</h4>
+                        <div className="industries-list">
+                          {Array.isArray(industries) && industries.length > 0 ? (
+                            industries.map(industry => (
+                              <div key={industry.id || industry} className="industry-item">
+                                {editingIndustry === (industry.id || industry) ? (
+                                  <div className="edit-industry">
+                                    <input
+                                      type="text"
+                                      defaultValue={industry.name || industry}
+                                      onBlur={(e) => {
+                                        if (e.target.value !== (industry.name || industry)) {
+                                          handleUpdateIndustry(industry.id, { name: e.target.value });
+                                        } else {
+                                          setEditingIndustry(null);
+                                        }
+                                      }}
+                                      onKeyPress={(e) => {
+                                        if (e.key === 'Enter') {
+                                          handleUpdateIndustry(industry.id, { name: e.target.value });
+                                        }
+                                      }}
+                                      autoFocus
+                                    />
+                                  </div>
+                                ) : (
+                                  <>
+                                    <span className="industry-name">
+                                      {industry.name || industry}
+                                      {industry.is_active === false && (
+                                        <span className="status-badge inactive">Inactive</span>
+                                      )}
+                                    </span>
+                                    {industry.id && (
+                                      <div className="industry-actions">
+                                        <button
+                                          onClick={() => setEditingIndustry(industry.id)}
+                                          className="btn-icon"
+                                          title="Edit"
+                                        >
+                                          <i className="fas fa-edit"></i>
+                                        </button>
+                                        <button
+                                          onClick={() => handleUpdateIndustry(industry.id, { is_active: !industry.is_active })}
+                                          className="btn-icon"
+                                          title={industry.is_active ? 'Deactivate' : 'Activate'}
+                                        >
+                                          <i className={`fas fa-${industry.is_active ? 'toggle-on' : 'toggle-off'}`}></i>
+                                        </button>
+                                        <button
+                                          onClick={() => handleDeleteIndustry(industry.id, industry.name)}
+                                          className="btn-icon btn-danger"
+                                          title="Delete"
+                                        >
+                                          <i className="fas fa-trash"></i>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            ))
+                          ) : (
+                            <p className="no-data">No industries found</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="config-card">
+                        <h4>Add New Industry</h4>
+                        <form onSubmit={handleCreateIndustry} className="config-form">
+                          <div className="form-group">
+                            <label>Industry Name *</label>
+                            <input
+                              type="text"
+                              value={newIndustry}
+                              onChange={(e) => setNewIndustry(e.target.value)}
+                              placeholder="e.g., Telecommunications, Aerospace, etc."
+                              required
+                            />
+                          </div>
+                          <button type="submit" className="btn-primary">
+                            <i className="fas fa-plus"></i> Add Industry
+                          </button>
+                        </form>
+                        <div className="info-box">
+                          <i className="fas fa-info-circle"></i>
+                          <p>Industries appear in the user registration and assessment forms. Users can select their industry to get tailored benchmarks.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pillars Section */}
+                  <div className="config-section">
+                    <div className="section-header">
+                      <h3><i className="fas fa-columns"></i> Assessment Pillars</h3>
+                    </div>
+
+                    <div className="config-grid">
+                      <div className="config-card">
+                        <h4>Manage Pillars</h4>
+                        <div className="industries-list">
+                          {Array.isArray(pillars) && pillars.length > 0 ? (
+                            pillars.map(pillar => (
+                              <div key={pillar.id || pillar.name || pillar} className="industry-item">
+                                {editingPillar === (pillar.id || pillar.name) ? (
+                                  <div className="edit-pillar">
+                                    <input
+                                      type="text"
+                                      defaultValue={pillar.name || pillar}
+                                      placeholder="Full Name"
+                                      onBlur={(e) => {
+                                        const shortInput = e.target.nextSibling;
+                                        if (e.target.value !== (pillar.name || pillar)) {
+                                          handleUpdatePillar(pillar.id, { 
+                                            name: e.target.value,
+                                            short_name: shortInput?.value || pillar.short_name
+                                          });
+                                        } else {
+                                          setEditingPillar(null);
+                                        }
+                                      }}
+                                      onKeyPress={(e) => {
+                                        if (e.key === 'Enter') {
+                                          const shortInput = e.target.nextSibling;
+                                          handleUpdatePillar(pillar.id, { 
+                                            name: e.target.value,
+                                            short_name: shortInput?.value || pillar.short_name
+                                          });
+                                        }
+                                      }}
+                                      autoFocus
+                                    />
+                                    <input
+                                      type="text"
+                                      defaultValue={pillar.short_name || ''}
+                                      placeholder="Short"
+                                      style={{ marginLeft: '0.5rem', maxWidth: '100px' }}
+                                    />
+                                  </div>
+                                ) : (
+                                  <>
+                                    <span className="industry-name">
+                                      <strong>{pillar.name || pillar}</strong>
+                                      {pillar.short_name && (
+                                        <span style={{ marginLeft: '0.5rem', color: 'var(--fm-gray)', fontSize: '0.85rem' }}>
+                                          ({pillar.short_name})
+                                        </span>
+                                      )}
+                                      {pillar.is_active === false && (
+                                        <span className="status-badge inactive">Inactive</span>
+                                      )}
+                                    </span>
+                                    {pillar.id && (
+                                      <div className="industry-actions">
+                                        <button
+                                          onClick={() => setEditingPillar(pillar.id)}
+                                          className="btn-icon"
+                                          title="Edit"
+                                        >
+                                          <i className="fas fa-edit"></i>
+                                        </button>
+                                        <button
+                                          onClick={() => handleUpdatePillar(pillar.id, { is_active: !pillar.is_active })}
+                                          className="btn-icon"
+                                          title={pillar.is_active ? 'Deactivate' : 'Activate'}
+                                        >
+                                          <i className={`fas fa-${pillar.is_active ? 'toggle-on' : 'toggle-off'}`}></i>
+                                        </button>
+                                        <button
+                                          onClick={() => handleDeletePillar(pillar.id, pillar.name)}
+                                          className="btn-icon btn-danger"
+                                          title="Delete"
+                                        >
+                                          <i className="fas fa-trash"></i>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            ))
+                          ) : (
+                            <p className="no-data">No pillars found</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="config-card">
+                        <h4>Add New Pillar</h4>
+                        <form onSubmit={handleCreatePillar} className="config-form">
+                          <div className="form-group">
+                            <label>Pillar Name *</label>
+                            <input
+                              type="text"
+                              value={newPillar.name}
+                              onChange={(e) => setNewPillar({ ...newPillar, name: e.target.value })}
+                              placeholder="e.g., Innovation, Compliance, etc."
+                              required
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label>Short Name * (uppercase, 3-5 chars)</label>
+                            <input
+                              type="text"
+                              value={newPillar.short_name}
+                              onChange={(e) => setNewPillar({ ...newPillar, short_name: e.target.value.toUpperCase() })}
+                              placeholder="e.g., INNOV, COMP"
+                              maxLength="5"
+                              required
+                            />
+                            <small>Used in internal references and database</small>
+                          </div>
+                          <button type="submit" className="btn-primary">
+                            <i className="fas fa-plus"></i> Add Pillar
+                          </button>
+                        </form>
+                        <div className="info-box">
+                          <i className="fas fa-info-circle"></i>
+                          <p>Pillars are the core assessment dimensions used to evaluate different aspects of AI readiness. Questions are organized by pillars.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1076,8 +1639,8 @@ const AdminDashboard = () => {
         <QuestionModal
           mode={questionModalMode}
           question={selectedQuestion}
-          assessmentTypes={ASSESSMENT_TYPES}
-          pillars={PILLARS}
+          assessmentTypes={assessmentTypes}
+          pillars={pillars}
           onClose={() => {
             setShowQuestionModal(false);
             setSelectedQuestion(null);

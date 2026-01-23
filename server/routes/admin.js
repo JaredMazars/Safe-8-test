@@ -1444,4 +1444,723 @@ router.put('/questions/:questionId/reorder', doubleCsrfProtection, authenticateA
   }
 });
 
+// ======================
+// CONFIGURATION MANAGEMENT
+// ======================
+
+// Get all assessment types
+router.get('/config/assessment-types', authenticateAdmin, async (req, res) => {
+  try {
+    const sql = `
+      SELECT DISTINCT assessment_type
+      FROM assessment_questions
+      WHERE is_active = 1
+      ORDER BY assessment_type;
+    `;
+    const result = await database.query(sql);
+    
+    res.json({
+      success: true,
+      assessmentTypes: Array.isArray(result) ? result.map(r => r.assessment_type) : []
+    });
+  } catch (error) {
+    console.error('❌ Error getting assessment types:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching assessment types'
+    });
+  }
+});
+
+// Get all industries
+router.get('/config/industries', authenticateAdmin, async (req, res) => {
+  try {
+    // Check if industries table exists, if not return default list
+    const checkTableSql = `
+      SELECT TABLE_NAME 
+      FROM INFORMATION_SCHEMA.TABLES 
+      WHERE TABLE_NAME = 'industries';
+    `;
+    const tableCheck = await database.query(checkTableSql);
+    
+    if (!Array.isArray(tableCheck) || tableCheck.length === 0) {
+      // Return default industries
+      return res.json({
+        success: true,
+        industries: [
+          'Financial Services',
+          'Technology',
+          'Healthcare',
+          'Manufacturing',
+          'Retail & E-commerce',
+          'Energy & Utilities',
+          'Government',
+          'Education',
+          'Professional Services',
+          'Other'
+        ]
+      });
+    }
+    
+    const sql = `
+      SELECT id, name, is_active
+      FROM industries
+      ORDER BY name;
+    `;
+    const result = await database.query(sql);
+    
+    res.json({
+      success: true,
+      industries: Array.isArray(result) ? result : []
+    });
+  } catch (error) {
+    console.error('❌ Error getting industries:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching industries'
+    });
+  }
+});
+
+// Create new assessment type (by creating first question for it)
+router.post('/config/assessment-types', doubleCsrfProtection, authenticateAdmin, async (req, res) => {
+  try {
+    const { assessment_type, description } = req.body;
+
+    if (!assessment_type) {
+      return res.status(400).json({
+        success: false,
+        message: 'Assessment type is required'
+      });
+    }
+
+    // Check if already exists
+    const checkSql = `
+      SELECT COUNT(*) as count
+      FROM assessment_questions
+      WHERE assessment_type = ?;
+    `;
+    const checkResult = await database.query(checkSql, [assessment_type.toUpperCase()]);
+    
+    if (checkResult.recordset[0].count > 0) {
+      return res.status(409).json({
+        success: false,
+        message: 'Assessment type already exists'
+      });
+    }
+
+    // Create a placeholder question for the new assessment type
+    const sql = `
+      INSERT INTO assessment_questions (
+        assessment_type, pillar_name, pillar_short_name, question_text, question_order, created_by, is_active
+      )
+      OUTPUT INSERTED.id
+      VALUES (?, 'Strategy', 'STRAT', ?, 1, ?, 1);
+    `;
+
+    const result = await database.query(sql, [
+      assessment_type.toUpperCase(),
+      description || `Sample question for ${assessment_type} assessment`,
+      req.admin.id
+    ]);
+
+    const questionId = result.recordset[0].id;
+
+    await Admin.logActivity(
+      req.admin.id,
+      'CREATE',
+      'assessment_type',
+      questionId,
+      `Created new assessment type: ${assessment_type}`,
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    console.log('✅ Assessment type created:', assessment_type);
+
+    res.json({
+      success: true,
+      message: 'Assessment type created successfully',
+      assessmentType: assessment_type.toUpperCase()
+    });
+  } catch (error) {
+    console.error('❌ Error creating assessment type:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error creating assessment type'
+    });
+  }
+});
+
+// Update assessment type
+router.put('/config/assessment-types/:oldType', doubleCsrfProtection, authenticateAdmin, async (req, res) => {
+  try {
+    const { oldType } = req.params;
+    const { new_type } = req.body;
+
+    if (!new_type) {
+      return res.status(400).json({
+        success: false,
+        message: 'New assessment type name is required'
+      });
+    }
+
+    const newTypeUpper = new_type.toUpperCase();
+    const oldTypeUpper = oldType.toUpperCase();
+
+    // Check if new type already exists
+    const checkSql = `
+      SELECT COUNT(*) as count
+      FROM assessment_questions
+      WHERE assessment_type = ?;
+    `;
+    const checkResult = await database.query(checkSql, [newTypeUpper]);
+    
+    if (checkResult.recordset[0].count > 0 && newTypeUpper !== oldTypeUpper) {
+      return res.status(409).json({
+        success: false,
+        message: 'Assessment type already exists'
+      });
+    }
+
+    // Update all questions with this assessment type
+    const sql = `
+      UPDATE assessment_questions
+      SET assessment_type = ?
+      WHERE assessment_type = ?;
+    `;
+
+    await database.query(sql, [newTypeUpper, oldTypeUpper]);
+
+    // Update all assessments with this type
+    const updateAssessmentsSql = `
+      UPDATE assessments
+      SET assessment_type = ?
+      WHERE assessment_type = ?;
+    `;
+
+    await database.query(updateAssessmentsSql, [newTypeUpper, oldTypeUpper]);
+
+    await Admin.logActivity(
+      req.admin.id,
+      'UPDATE',
+      'assessment_type',
+      null,
+      `Updated assessment type from ${oldTypeUpper} to ${newTypeUpper}`,
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    console.log('✅ Assessment type updated:', oldTypeUpper, '->', newTypeUpper);
+
+    res.json({
+      success: true,
+      message: 'Assessment type updated successfully',
+      assessmentType: newTypeUpper
+    });
+  } catch (error) {
+    console.error('❌ Error updating assessment type:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating assessment type'
+    });
+  }
+});
+
+// Delete assessment type (soft delete by deactivating all questions)
+router.delete('/config/assessment-types/:assessmentType', doubleCsrfProtection, authenticateAdmin, async (req, res) => {
+  try {
+    const { assessmentType } = req.params;
+    const assessmentTypeUpper = assessmentType.toUpperCase();
+
+    // Soft delete by setting is_active = 0 for all questions of this type
+    const sql = `
+      UPDATE assessment_questions
+      SET is_active = 0
+      WHERE assessment_type = ?;
+    `;
+
+    const result = await database.query(sql, [assessmentTypeUpper]);
+
+    await Admin.logActivity(
+      req.admin.id,
+      'DELETE',
+      'assessment_type',
+      null,
+      `Deleted assessment type: ${assessmentTypeUpper}`,
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    console.log('✅ Assessment type deleted:', assessmentTypeUpper);
+
+    res.json({
+      success: true,
+      message: 'Assessment type deleted successfully (all questions deactivated)'
+    });
+  } catch (error) {
+    console.error('❌ Error deleting assessment type:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting assessment type'
+    });
+  }
+});
+
+// Add new industry
+router.post('/config/industries', doubleCsrfProtection, authenticateAdmin, async (req, res) => {
+  try {
+    const { name } = req.body;
+
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        message: 'Industry name is required'
+      });
+    }
+
+    // Create industries table if it doesn't exist
+    const createTableSql = `
+      IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'industries')
+      BEGIN
+        CREATE TABLE industries (
+          id INT IDENTITY(1,1) PRIMARY KEY,
+          name NVARCHAR(100) NOT NULL UNIQUE,
+          is_active BIT DEFAULT 1,
+          created_at DATETIME2 DEFAULT GETDATE(),
+          created_by NVARCHAR(50)
+        );
+      END
+    `;
+    await database.query(createTableSql);
+
+    // Insert new industry
+    const sql = `
+      INSERT INTO industries (name, created_by)
+      OUTPUT INSERTED.id, INSERTED.name, INSERTED.is_active
+      VALUES (?, ?);
+    `;
+
+    const result = await database.query(sql, [name, req.admin.id]);
+    const industry = result.recordset[0];
+
+    await Admin.logActivity(
+      req.admin.id,
+      'CREATE',
+      'industry',
+      industry.id,
+      `Created new industry: ${name}`,
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    console.log('✅ Industry created:', name);
+
+    res.json({
+      success: true,
+      message: 'Industry created successfully',
+      industry
+    });
+  } catch (error) {
+    if (error.message.includes('UNIQUE')) {
+      return res.status(409).json({
+        success: false,
+        message: 'Industry already exists'
+      });
+    }
+    console.error('❌ Error creating industry:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error creating industry'
+    });
+  }
+});
+
+// Update industry
+router.put('/config/industries/:industryId', doubleCsrfProtection, authenticateAdmin, async (req, res) => {
+  try {
+    const { industryId } = req.params;
+    const { name, is_active } = req.body;
+
+    const updates = [];
+    const params = [];
+
+    if (name !== undefined) {
+      updates.push('name = ?');
+      params.push(name);
+    }
+
+    if (is_active !== undefined) {
+      updates.push('is_active = ?');
+      params.push(is_active ? 1 : 0);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No fields to update'
+      });
+    }
+
+    params.push(industryId);
+
+    const sql = `
+      UPDATE industries
+      SET ${updates.join(', ')}
+      OUTPUT INSERTED.id, INSERTED.name, INSERTED.is_active
+      WHERE id = ?;
+    `;
+
+    const result = await database.query(sql, params);
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Industry not found'
+      });
+    }
+
+    const industry = result.recordset[0];
+
+    await Admin.logActivity(
+      req.admin.id,
+      'UPDATE',
+      'industry',
+      industryId,
+      `Updated industry: ${industry.name}`,
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    console.log('✅ Industry updated:', industry.name);
+
+    res.json({
+      success: true,
+      message: 'Industry updated successfully',
+      industry
+    });
+  } catch (error) {
+    console.error('❌ Error updating industry:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating industry'
+    });
+  }
+});
+
+// Delete industry
+router.delete('/config/industries/:industryId', doubleCsrfProtection, authenticateAdmin, async (req, res) => {
+  try {
+    const { industryId } = req.params;
+
+    // Soft delete by setting is_active = 0
+    const sql = `
+      UPDATE industries
+      SET is_active = 0
+      OUTPUT DELETED.name
+      WHERE id = ?;
+    `;
+
+    const result = await database.query(sql, [industryId]);
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Industry not found'
+      });
+    }
+
+    const industryName = result.recordset[0].name;
+
+    await Admin.logActivity(
+      req.admin.id,
+      'DELETE',
+      'industry',
+      industryId,
+      `Deleted industry: ${industryName}`,
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    console.log('✅ Industry deleted:', industryName);
+
+    res.json({
+      success: true,
+      message: 'Industry deleted successfully'
+    });
+  } catch (error) {
+    console.error('❌ Error deleting industry:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting industry'
+    });
+  }
+});
+
+// ======================
+// PILLAR MANAGEMENT
+// ======================
+
+// Get all pillars
+router.get('/config/pillars', authenticateAdmin, async (req, res) => {
+  try {
+    // Check if pillars table exists, if not return default list
+    const checkTableSql = `
+      SELECT TABLE_NAME 
+      FROM INFORMATION_SCHEMA.TABLES 
+      WHERE TABLE_NAME = 'pillars';
+    `;
+    const tableCheck = await database.query(checkTableSql);
+    
+    if (!Array.isArray(tableCheck) || tableCheck.length === 0) {
+      // Get distinct pillars from existing questions
+      const sql = `
+        SELECT DISTINCT pillar_name as name, pillar_short_name as short_name
+        FROM assessment_questions
+        WHERE is_active = 1
+        ORDER BY pillar_name;
+      `;
+      const result = await database.query(sql);
+      
+      return res.json({
+        success: true,
+        pillars: Array.isArray(result) ? result : []
+      });
+    }
+    
+    const sql = `
+      SELECT id, name, short_name, is_active
+      FROM pillars
+      ORDER BY name;
+    `;
+    const result = await database.query(sql);
+    
+    res.json({
+      success: true,
+      pillars: Array.isArray(result) ? result : []
+    });
+  } catch (error) {
+    console.error('❌ Error getting pillars:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching pillars'
+    });
+  }
+});
+
+// Create new pillar
+router.post('/config/pillars', doubleCsrfProtection, authenticateAdmin, async (req, res) => {
+  try {
+    const { name, short_name } = req.body;
+
+    if (!name || !short_name) {
+      return res.status(400).json({
+        success: false,
+        message: 'Pillar name and short name are required'
+      });
+    }
+
+    // Create pillars table if it doesn't exist
+    const createTableSql = `
+      IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'pillars')
+      BEGIN
+        CREATE TABLE pillars (
+          id INT IDENTITY(1,1) PRIMARY KEY,
+          name NVARCHAR(100) NOT NULL UNIQUE,
+          short_name NVARCHAR(10) NOT NULL UNIQUE,
+          is_active BIT DEFAULT 1,
+          created_at DATETIME2 DEFAULT GETDATE(),
+          created_by NVARCHAR(50)
+        );
+      END
+    `;
+    await database.query(createTableSql);
+
+    // Insert new pillar
+    const sql = `
+      INSERT INTO pillars (name, short_name, created_by)
+      OUTPUT INSERTED.id, INSERTED.name, INSERTED.short_name, INSERTED.is_active
+      VALUES (?, ?, ?);
+    `;
+
+    const result = await database.query(sql, [name, short_name.toUpperCase(), req.admin.id]);
+    const pillar = result.recordset[0];
+
+    await Admin.logActivity(
+      req.admin.id,
+      'CREATE',
+      'pillar',
+      pillar.id,
+      `Created new pillar: ${name} (${short_name})`,
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    console.log('✅ Pillar created:', name);
+
+    res.json({
+      success: true,
+      message: 'Pillar created successfully',
+      pillar
+    });
+  } catch (error) {
+    if (error.message.includes('UNIQUE')) {
+      return res.status(409).json({
+        success: false,
+        message: 'Pillar name or short name already exists'
+      });
+    }
+    console.error('❌ Error creating pillar:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error creating pillar'
+    });
+  }
+});
+
+// Update pillar
+router.put('/config/pillars/:pillarId', doubleCsrfProtection, authenticateAdmin, async (req, res) => {
+  try {
+    const { pillarId } = req.params;
+    const { name, short_name, is_active } = req.body;
+
+    const updates = [];
+    const params = [];
+
+    if (name !== undefined) {
+      updates.push('name = ?');
+      params.push(name);
+    }
+
+    if (short_name !== undefined) {
+      updates.push('short_name = ?');
+      params.push(short_name.toUpperCase());
+    }
+
+    if (is_active !== undefined) {
+      updates.push('is_active = ?');
+      params.push(is_active ? 1 : 0);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No fields to update'
+      });
+    }
+
+    params.push(pillarId);
+
+    const sql = `
+      UPDATE pillars
+      SET ${updates.join(', ')}
+      OUTPUT INSERTED.id, INSERTED.name, INSERTED.short_name, INSERTED.is_active
+      WHERE id = ?;
+    `;
+
+    const result = await database.query(sql, params);
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Pillar not found'
+      });
+    }
+
+    const pillar = result.recordset[0];
+
+    // Update all questions using this pillar if name changed
+    if (name !== undefined) {
+      await database.query(`
+        UPDATE assessment_questions
+        SET pillar_name = ?
+        WHERE pillar_name = (SELECT name FROM pillars WHERE id = ? AND name != ?);
+      `, [name, pillarId, name]);
+    }
+
+    if (short_name !== undefined) {
+      await database.query(`
+        UPDATE assessment_questions
+        SET pillar_short_name = ?
+        WHERE pillar_short_name = (SELECT short_name FROM pillars WHERE id = ? AND short_name != ?);
+      `, [short_name.toUpperCase(), pillarId, short_name.toUpperCase()]);
+    }
+
+    await Admin.logActivity(
+      req.admin.id,
+      'UPDATE',
+      'pillar',
+      pillarId,
+      `Updated pillar: ${pillar.name}`,
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    console.log('✅ Pillar updated:', pillar.name);
+
+    res.json({
+      success: true,
+      message: 'Pillar updated successfully',
+      pillar
+    });
+  } catch (error) {
+    console.error('❌ Error updating pillar:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating pillar'
+    });
+  }
+});
+
+// Delete pillar (soft delete)
+router.delete('/config/pillars/:pillarId', doubleCsrfProtection, authenticateAdmin, async (req, res) => {
+  try {
+    const { pillarId } = req.params;
+
+    // Soft delete by setting is_active = 0
+    const sql = `
+      UPDATE pillars
+      SET is_active = 0
+      OUTPUT DELETED.name
+      WHERE id = ?;
+    `;
+
+    const result = await database.query(sql, [pillarId]);
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Pillar not found'
+      });
+    }
+
+    const pillarName = result.recordset[0].name;
+
+    await Admin.logActivity(
+      req.admin.id,
+      'DELETE',
+      'pillar',
+      pillarId,
+      `Deleted pillar: ${pillarName}`,
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    console.log('✅ Pillar deleted:', pillarName);
+
+    res.json({
+      success: true,
+      message: 'Pillar deleted successfully'
+    });
+  } catch (error) {
+    console.error('❌ Error deleting pillar:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting pillar'
+    });
+  }
+});
+
 export default router;
+
+
