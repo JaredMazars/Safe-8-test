@@ -26,12 +26,13 @@ const config = {
     enableArithAbort: true,
   },
   pool: {
-    max: 10,
+    max: 3, // Reduced from 10 - saves Azure SQL DTU costs
     min: 0,
     idleTimeoutMillis: 30000,
-    acquireTimeoutMillis: 10000 // Fail fast if can't get connection
+    acquireTimeoutMillis: 10000
   },
-  connectionTimeout: 10000, // Reduced from 30000
+  connectionTimeout: 10000,
+  requestTimeout: 15000 // Timeout queries - reduced DTU usage
 };
 
 // ✅ Create singleton connection pool

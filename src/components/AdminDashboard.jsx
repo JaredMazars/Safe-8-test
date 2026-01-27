@@ -56,6 +56,12 @@ const AdminDashboard = () => {
   const [industries, setIndustries] = useState([]);
   const [newAssessmentType, setNewAssessmentType] = useState('');
   const [newAssessmentDescription, setNewAssessmentDescription] = useState('');
+  const [newAssessmentTitle, setNewAssessmentTitle] = useState('');
+  const [newAssessmentDuration, setNewAssessmentDuration] = useState('');
+  const [newAssessmentIcon, setNewAssessmentIcon] = useState('fas fa-clipboard-check');
+  const [newAssessmentFeatures, setNewAssessmentFeatures] = useState('');
+  const [newAssessmentAudience, setNewAssessmentAudience] = useState('');
+  const [newAssessmentAudienceColor, setNewAssessmentAudienceColor] = useState('blue');
   const [newIndustry, setNewIndustry] = useState('');
   const [editingIndustry, setEditingIndustry] = useState(null);
   const [editingAssessmentType, setEditingAssessmentType] = useState(null);
@@ -75,6 +81,8 @@ const AdminDashboard = () => {
     }
     setAdminUser(JSON.parse(adminData));
     loadDashboardStats();
+    // Load configuration data for dropdowns
+    loadConfiguration();
   }, [navigate]);
 
   useEffect(() => {
@@ -82,12 +90,19 @@ const AdminDashboard = () => {
       loadUsers(1);
     } else if (activeTab === 'questions') {
       loadQuestions(1);
+      // Load config data for question modal dropdowns
+      if (assessmentTypes.length === 0 || pillars.length === 0) {
+        loadConfiguration();
+      }
     } else if (activeTab === 'assessments') {
       loadAssessments(1);
     } else if (activeTab === 'activity') {
       loadActivityLogs(1);
     } else if (activeTab === 'config') {
-      loadConfiguration();
+      // Only load if config is empty (prevents repeated DB calls)
+      if (assessmentTypes.length === 0 && industries.length === 0 && pillars.length === 0) {
+        loadConfiguration();
+      }
     }
   }, [activeTab, questionTypeFilter, questionPillarFilter, assessmentTypeFilter, activityActionFilter, activityEntityFilter]);
 
@@ -357,26 +372,53 @@ const AdminDashboard = () => {
   const loadConfiguration = async () => {
     setConfigLoading(true);
     try {
+      console.log('🔄 Loading configuration...');
+      
       const [typesResponse, industriesResponse, pillarsResponse] = await Promise.all([
         api.get('/api/admin/config/assessment-types'),
         api.get('/api/admin/config/industries'),
         api.get('/api/admin/config/pillars')
       ]);
 
-      if (typesResponse.data.success) {
+      console.log('📊 Raw API Responses:');
+      console.log('  Types:', JSON.stringify(typesResponse.data, null, 2));
+      console.log('  Industries:', JSON.stringify(industriesResponse.data, null, 2));
+      console.log('  Pillars:', JSON.stringify(pillarsResponse.data, null, 2));
+
+      console.log('📊 Response Success Flags:');
+      console.log('  Types success:', typesResponse.data.success);
+      console.log('  Industries success:', industriesResponse.data.success);
+      console.log('  Pillars success:', pillarsResponse.data.success);
+
+      if (typesResponse.data.success && typesResponse.data.assessmentTypes) {
+        console.log('✅ Setting assessment types:', typesResponse.data.assessmentTypes);
         setAssessmentTypes(typesResponse.data.assessmentTypes);
+      } else {
+        console.warn('⚠️ Assessment types not set - success:', typesResponse.data.success, 'data:', typesResponse.data.assessmentTypes);
+        setAssessmentTypes([]);
       }
 
-      if (industriesResponse.data.success) {
+      if (industriesResponse.data.success && industriesResponse.data.industries) {
+        console.log('✅ Setting industries:', industriesResponse.data.industries);
         setIndustries(industriesResponse.data.industries);
+      } else {
+        console.warn('⚠️ Industries not set - success:', industriesResponse.data.success, 'data:', industriesResponse.data.industries);
+        setIndustries([]);
       }
 
-      if (pillarsResponse.data.success) {
+      if (pillarsResponse.data.success && pillarsResponse.data.pillars) {
         setPillars(pillarsResponse.data.pillars);
+      } else {
+        console.warn('⚠️ Pillars response:', pillarsResponse.data);
+        setPillars([]);
       }
     } catch (error) {
-      console.error('Error loading configuration:', error);
+      console.error('❌ Error loading configuration:', error);
+      console.error('Error details:', error.response?.data);
       setError('Failed to load configuration');
+      setAssessmentTypes([]);
+      setIndustries([]);
+      setPillars([]);
     } finally {
       setConfigLoading(false);
     }
@@ -387,20 +429,39 @@ const AdminDashboard = () => {
     if (!newAssessmentType.trim()) return;
 
     try {
+      // Parse features from comma-separated string
+      const featuresArray = newAssessmentFeatures
+        .split(',')
+        .map(f => f.trim())
+        .filter(f => f.length > 0);
+
       const response = await api.post('/api/admin/config/assessment-types', {
         assessment_type: newAssessmentType.trim(),
-        description: newAssessmentDescription.trim()
+        title: newAssessmentTitle.trim() || `${newAssessmentType.trim()} Assessment`,
+        description: newAssessmentDescription.trim(),
+        duration: newAssessmentDuration.trim() || '~10 minutes',
+        icon: newAssessmentIcon.trim() || 'fas fa-clipboard-check',
+        features: featuresArray.length > 0 ? featuresArray : ['Comprehensive evaluation'],
+        audience: newAssessmentAudience.trim() || 'All Users',
+        audience_color: newAssessmentAudienceColor || 'blue'
       });
 
       if (response.data.success) {
-        alert('Assessment type created successfully! You can now add questions for this type.');
+        // Reset all fields
         setNewAssessmentType('');
+        setNewAssessmentTitle('');
         setNewAssessmentDescription('');
-        loadConfiguration();
+        setNewAssessmentDuration('');
+        setNewAssessmentIcon('fas fa-clipboard-check');
+        setNewAssessmentFeatures('');
+        setNewAssessmentAudience('');
+        setNewAssessmentAudienceColor('blue');
+        await loadConfiguration();
+        alert('✅ Assessment type created successfully with card configuration! It will now appear on the home screen.');
       }
     } catch (error) {
       console.error('Error creating assessment type:', error);
-      alert(error.response?.data?.message || 'Failed to create assessment type');
+      alert('❌ ' + (error.response?.data?.message || 'Failed to create assessment type'));
     }
   };
 
@@ -414,13 +475,16 @@ const AdminDashboard = () => {
       });
 
       if (response.data.success) {
-        alert('Industry created successfully!');
         setNewIndustry('');
-        loadConfiguration();
+        await loadConfiguration();
+        alert('✅ Industry created successfully!');
       }
     } catch (error) {
       console.error('Error creating industry:', error);
-      alert(error.response?.data?.message || 'Failed to create industry');
+      const errorMsg = error.response?.data?.error || 
+                       error.response?.data?.message || 
+                       'Failed to create industry';
+      alert('❌ ' + errorMsg);
     }
   };
 
@@ -429,13 +493,13 @@ const AdminDashboard = () => {
       const response = await api.put(`/api/admin/config/industries/${industryId}`, updates);
 
       if (response.data.success) {
-        alert('Industry updated successfully!');
         setEditingIndustry(null);
-        loadConfiguration();
+        await loadConfiguration();
+        alert('✅ Industry updated successfully!');
       }
     } catch (error) {
       console.error('Error updating industry:', error);
-      alert(error.response?.data?.message || 'Failed to update industry');
+      alert('❌ ' + (error.response?.data?.message || 'Failed to update industry'));
     }
   };
 
@@ -446,12 +510,12 @@ const AdminDashboard = () => {
       const response = await api.delete(`/api/admin/config/industries/${industryId}`);
 
       if (response.data.success) {
-        alert('Industry deleted successfully!');
-        loadConfiguration();
+        await loadConfiguration();
+        alert('✅ Industry deleted successfully!');
       }
     } catch (error) {
       console.error('Error deleting industry:', error);
-      alert(error.response?.data?.message || 'Failed to delete industry');
+      alert('❌ ' + (error.response?.data?.message || 'Failed to delete industry'));
     }
   };
 
@@ -467,13 +531,14 @@ const AdminDashboard = () => {
       });
 
       if (response.data.success) {
-        alert('Assessment type updated successfully!');
         setEditingAssessmentType(null);
-        loadConfiguration();
+        await loadConfiguration();
+        alert('✅ Assessment type updated successfully!');
       }
     } catch (error) {
       console.error('Error updating assessment type:', error);
-      alert(error.response?.data?.message || 'Failed to update assessment type');
+      setEditingAssessmentType(null);
+      alert('❌ ' + (error.response?.data?.message || 'Failed to update assessment type'));
     }
   };
 
@@ -484,12 +549,12 @@ const AdminDashboard = () => {
       const response = await api.delete(`/api/admin/config/assessment-types/${assessmentType}`);
 
       if (response.data.success) {
-        alert('Assessment type deleted successfully! All associated questions have been deactivated.');
-        loadConfiguration();
+        await loadConfiguration();
+        alert('✅ Assessment type deleted successfully! All associated questions have been deactivated.');
       }
     } catch (error) {
       console.error('Error deleting assessment type:', error);
-      alert(error.response?.data?.message || 'Failed to delete assessment type');
+      alert('❌ ' + (error.response?.data?.message || 'Failed to delete assessment type'));
     }
   };
 
@@ -504,13 +569,13 @@ const AdminDashboard = () => {
       });
 
       if (response.data.success) {
-        alert('Pillar created successfully!');
         setNewPillar({ name: '', short_name: '' });
-        loadConfiguration();
+        await loadConfiguration();
+        alert('✅ Pillar created successfully!');
       }
     } catch (error) {
       console.error('Error creating pillar:', error);
-      alert(error.response?.data?.message || 'Failed to create pillar');
+      alert('❌ ' + (error.response?.data?.message || 'Failed to create pillar'));
     }
   };
 
@@ -519,13 +584,13 @@ const AdminDashboard = () => {
       const response = await api.put(`/api/admin/config/pillars/${pillarId}`, updates);
 
       if (response.data.success) {
-        alert('Pillar updated successfully!');
         setEditingPillar(null);
-        loadConfiguration();
+        await loadConfiguration();
+        alert('✅ Pillar updated successfully!');
       }
     } catch (error) {
       console.error('Error updating pillar:', error);
-      alert(error.response?.data?.message || 'Failed to update pillar');
+      alert('❌ ' + (error.response?.data?.message || 'Failed to update pillar'));
     }
   };
 
@@ -536,12 +601,12 @@ const AdminDashboard = () => {
       const response = await api.delete(`/api/admin/config/pillars/${pillarId}`);
 
       if (response.data.success) {
-        alert('Pillar deleted successfully!');
-        loadConfiguration();
+        await loadConfiguration();
+        alert('✅ Pillar deleted successfully!');
       }
     } catch (error) {
       console.error('Error deleting pillar:', error);
-      alert(error.response?.data?.message || 'Failed to delete pillar');
+      alert('❌ ' + (error.response?.data?.message || 'Failed to delete pillar'));
     }
   };
 
@@ -593,6 +658,9 @@ const AdminDashboard = () => {
               </div>
             </div>
             <div className="admin-header-right">
+              <button onClick={() => navigate('/')} className="btn-back-home">
+                <i className="fas fa-home"></i> Back to Home
+              </button>
               <div className="admin-user-info">
                 <i className="fas fa-user-shield"></i>
                 <div>
@@ -1328,33 +1396,104 @@ const AdminDashboard = () => {
                       <div className="config-card">
                         <h4>Create New Assessment Type</h4>
                         <form onSubmit={handleCreateAssessmentType} className="config-form">
-                          <div className="form-group">
-                            <label>Assessment Type Name *</label>
-                            <input
-                              type="text"
-                              value={newAssessmentType}
-                              onChange={(e) => setNewAssessmentType(e.target.value)}
-                              placeholder="e.g., EXPERT, BASIC, etc."
-                              required
-                            />
-                            <small>Use uppercase letters (will be converted automatically)</small>
+                          <div className="form-row">
+                            <div className="form-group">
+                              <label>Type Code * (e.g., EXPERT, BASIC)</label>
+                              <input
+                                type="text"
+                                value={newAssessmentType}
+                                onChange={(e) => setNewAssessmentType(e.target.value.toUpperCase())}
+                                placeholder="EXPERT"
+                                required
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label>Display Title *</label>
+                              <input
+                                type="text"
+                                value={newAssessmentTitle}
+                                onChange={(e) => setNewAssessmentTitle(e.target.value)}
+                                placeholder="Expert Assessment"
+                                required
+                              />
+                            </div>
                           </div>
+
                           <div className="form-group">
-                            <label>Initial Question (optional)</label>
+                            <label>Description</label>
                             <textarea
                               value={newAssessmentDescription}
                               onChange={(e) => setNewAssessmentDescription(e.target.value)}
-                              placeholder="Enter a sample question for this assessment type..."
-                              rows="3"
+                              placeholder="Brief description of this assessment..."
+                              rows="2"
                             />
                           </div>
+
+                          <div className="form-row">
+                            <div className="form-group">
+                              <label>Duration</label>
+                              <input
+                                type="text"
+                                value={newAssessmentDuration}
+                                onChange={(e) => setNewAssessmentDuration(e.target.value)}
+                                placeholder="30 questions • ~8 minutes"
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label>Icon (FontAwesome class)</label>
+                              <input
+                                type="text"
+                                value={newAssessmentIcon}
+                                onChange={(e) => setNewAssessmentIcon(e.target.value)}
+                                placeholder="fas fa-trophy"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="form-group">
+                            <label>Features (comma-separated)</label>
+                            <input
+                              type="text"
+                              value={newAssessmentFeatures}
+                              onChange={(e) => setNewAssessmentFeatures(e.target.value)}
+                              placeholder="Advanced analytics, Deep insights, Expert recommendations"
+                            />
+                            <small>Separate features with commas</small>
+                          </div>
+
+                          <div className="form-row">
+                            <div className="form-group">
+                              <label>Target Audience</label>
+                              <input
+                                type="text"
+                                value={newAssessmentAudience}
+                                onChange={(e) => setNewAssessmentAudience(e.target.value)}
+                                placeholder="Senior Executives"
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label>Audience Badge Color</label>
+                              <select
+                                value={newAssessmentAudienceColor}
+                                onChange={(e) => setNewAssessmentAudienceColor(e.target.value)}
+                              >
+                                <option value="blue">Blue</option>
+                                <option value="green">Green</option>
+                                <option value="purple">Purple</option>
+                                <option value="orange">Orange</option>
+                                <option value="red">Red</option>
+                                <option value="teal">Teal</option>
+                              </select>
+                            </div>
+                          </div>
+
                           <button type="submit" className="btn-primary">
-                            <i className="fas fa-plus"></i> Create Assessment Type
+                            <i className="fas fa-plus"></i> Create Assessment Type Card
                           </button>
                         </form>
                         <div className="info-box">
                           <i className="fas fa-info-circle"></i>
-                          <p>After creating a new assessment type, you can add questions for it in the Questions tab.</p>
+                          <p>This will create a new assessment type card on the home screen with all the details you provide. Don't forget to add questions in the Questions tab!</p>
                         </div>
                       </div>
                     </div>
@@ -1401,7 +1540,7 @@ const AdminDashboard = () => {
                                         <span className="status-badge inactive">Inactive</span>
                                       )}
                                     </span>
-                                    {industry.id && (
+                                    {industry.id && !String(industry.id).startsWith('default-') && (
                                       <div className="industry-actions">
                                         <button
                                           onClick={() => setEditingIndustry(industry.id)}
@@ -1973,9 +2112,17 @@ const UserAssessmentsModal = ({ user, assessments, loading, onClose, onViewDetai
 
 // ========== Question Modal Component ==========
 const QuestionModal = ({ mode, question, assessmentTypes, pillars, onClose, onSuccess }) => {
+  // Debug logging
+  console.log('🔍 QuestionModal props:', {
+    assessmentTypesCount: assessmentTypes?.length || 0,
+    pillarsCount: pillars?.length || 0,
+    assessmentTypes,
+    pillars
+  });
+
   const [formData, setFormData] = useState({
     question_text: question?.question_text || '',
-    assessment_type: question?.assessment_type || 'CORE',
+    assessment_type: question?.assessment_type || (assessmentTypes?.[0] || 'CORE'),
     pillar_name: question?.pillar_name || 'Strategy',
     pillar_short_name: question?.pillar_short_name || '',
     question_order: question?.question_order || 1
@@ -2012,16 +2159,21 @@ const QuestionModal = ({ mode, question, assessmentTypes, pillars, onClose, onSu
     setError('');
 
     try {
+      console.log('📝 Submitting question form data:', formData);
       if (mode === 'create') {
-        await api.post('/api/admin/questions', formData);
+        const response = await api.post('/api/admin/questions', formData);
+        console.log('✅ Question created successfully:', response.data);
         alert('Question created successfully!');
       } else {
-        await api.put(`/api/admin/questions/${question.id}`, formData);
+        const response = await api.put(`/api/admin/questions/${question.id}`, formData);
+        console.log('✅ Question updated successfully:', response.data);
         alert('Question updated successfully!');
       }
       onSuccess();
     } catch (err) {
-      console.error('Error saving question:', err);
+      console.error('❌ Error saving question:', err);
+      console.error('❌ Error response:', err.response?.data);
+      console.error('❌ Error status:', err.response?.status);
       setError(err.response?.data?.message || 'Failed to save question');
     } finally {
       setIsSubmitting(false);
@@ -2062,10 +2214,15 @@ const QuestionModal = ({ mode, question, assessmentTypes, pillars, onClose, onSu
                   onChange={handleChange}
                   required
                   className="form-select"
+                  disabled={!assessmentTypes || assessmentTypes.length === 0}
                 >
-                  {assessmentTypes.map(type => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
+                  {(!assessmentTypes || assessmentTypes.length === 0) ? (
+                    <option value="">Loading assessment types...</option>
+                  ) : (
+                    assessmentTypes.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))
+                  )}
                 </select>
               </div>
 
@@ -2077,10 +2234,18 @@ const QuestionModal = ({ mode, question, assessmentTypes, pillars, onClose, onSu
                   onChange={handleChange}
                   required
                   className="form-select"
+                  disabled={!pillars || pillars.length === 0}
                 >
-                  {pillars.map(pillar => (
-                    <option key={pillar} value={pillar}>{pillar}</option>
-                  ))}
+                  {(!pillars || pillars.length === 0) ? (
+                    <option value="">Loading pillars...</option>
+                  ) : (
+                    pillars.map(pillar => {
+                      const pillarName = typeof pillar === 'string' ? pillar : pillar.name;
+                      return (
+                        <option key={pillarName} value={pillarName}>{pillarName}</option>
+                      );
+                    })
+                  )}
                 </select>
               </div>
             </div>

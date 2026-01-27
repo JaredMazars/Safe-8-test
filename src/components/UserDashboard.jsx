@@ -13,6 +13,7 @@ function UserDashboard({ user, onLogout }) {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [filterType, setFilterType] = useState('all');
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [assessmentTypes, setAssessmentTypes] = useState([]);
 
   // Logout handler
   const handleLogout = () => {
@@ -150,6 +151,21 @@ function UserDashboard({ user, onLogout }) {
     return '→';
   };
 
+  // Load assessment types for filters
+  useEffect(() => {
+    const fetchAssessmentTypes = async () => {
+      try {
+        const response = await api.get('/api/questions/assessment-types-config');
+        if (response.data && response.data.configs) {
+          setAssessmentTypes(response.data.configs);
+        }
+      } catch (err) {
+        console.error('❌ Error fetching assessment types:', err);
+      }
+    };
+    fetchAssessmentTypes();
+  }, []);
+
   useEffect(() => {
     if (user && (user.id || user.leadId || user.userId)) {
       loadDashboardData(false);
@@ -190,6 +206,11 @@ function UserDashboard({ user, onLogout }) {
   return (
     <div className="dashboard-container">
       <div className="dashboard-wrapper">
+        
+        {/* Back to Home Button */}
+        <button onClick={() => navigate('/')} className="btn-back-home" style={{ marginBottom: '20px' }}>
+          <i className="fas fa-arrow-left"></i> Back to Home
+        </button>
         
         {/* Header */}
         <div className="dashboard-header">
@@ -292,24 +313,15 @@ function UserDashboard({ user, onLogout }) {
             >
               All Assessments
             </button>
-            <button 
-              className={`filter-tab ${filterType === 'core' ? 'active' : ''}`}
-              onClick={() => handleFilterChange('core')}
-            >
-              Core
-            </button>
-            <button 
-              className={`filter-tab ${filterType === 'advanced' ? 'active' : ''}`}
-              onClick={() => handleFilterChange('advanced')}
-            >
-              Advanced
-            </button>
-            <button 
-              className={`filter-tab ${filterType === 'frontier' ? 'active' : ''}`}
-              onClick={() => handleFilterChange('frontier')}
-            >
-              Frontier
-            </button>
+            {assessmentTypes.map((type) => (
+              <button 
+                key={type.type}
+                className={`filter-tab ${filterType === type.type ? 'active' : ''}`}
+                onClick={() => handleFilterChange(type.type)}
+              >
+                {type.title || type.type}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -668,5 +680,7 @@ function UserDashboard({ user, onLogout }) {
     </div>
   );
 }
+
+
 
 export default UserDashboard;

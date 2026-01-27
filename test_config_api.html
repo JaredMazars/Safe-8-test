@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Config API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        h2 { color: #333; }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+        .error { color: red; }
+        .success { color: green; }
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>Configuration API Test Page</h1>
+    
+    <div class="section">
+        <h2>Step 1: Login as Admin</h2>
+        <input type="email" id="email" placeholder="Admin email" value="admin@safe8.com">
+        <input type="password" id="password" placeholder="Password" value="admin123">
+        <button onclick="login()">Login</button>
+        <div id="loginResult"></div>
+    </div>
+
+    <div class="section">
+        <h2>Step 2: Test Configuration APIs</h2>
+        <button onclick="testAssessmentTypes()">Test Assessment Types</button>
+        <button onclick="testIndustries()">Test Industries</button>
+        <button onclick="testPillars()">Test Pillars</button>
+        <button onclick="testAll()">Test All</button>
+        <div id="apiResults"></div>
+    </div>
+
+    <script>
+        let authToken = null;
+        let csrfToken = null;
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('loginResult');
+
+            try {
+                resultDiv.innerHTML = '<p>Logging in...</p>';
+                
+                const response = await fetch('http://localhost:5000/api/admin/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password }),
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+                
+                if (data.success && data.token) {
+                    authToken = data.token;
+                    resultDiv.innerHTML = `<p class="success">✅ Login successful!</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                    console.log('Auth token:', authToken);
+                    
+                    // Get CSRF token
+                    await getCsrfToken();
+                } else {
+                    resultDiv.innerHTML = `<p class="error">❌ Login failed</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ Error: ${error.message}</p>`;
+                console.error('Login error:', error);
+            }
+        }
+
+        async function getCsrfToken() {
+            try {
+                const response = await fetch('http://localhost:5000/api/csrf-token', {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                if (data.csrfToken) {
+                    csrfToken = data.csrfToken;
+                    console.log('CSRF token:', csrfToken);
+                }
+            } catch (error) {
+                console.error('CSRF token error:', error);
+            }
+        }
+
+        async function testAssessmentTypes() {
+            await testEndpoint('/api/admin/config/assessment-types', 'Assessment Types');
+        }
+
+        async function testIndustries() {
+            await testEndpoint('/api/admin/config/industries', 'Industries');
+        }
+
+        async function testPillars() {
+            await testEndpoint('/api/admin/config/pillars', 'Pillars');
+        }
+
+        async function testAll() {
+            await testAssessmentTypes();
+            await testIndustries();
+            await testPillars();
+        }
+
+        async function testEndpoint(endpoint, name) {
+            const resultDiv = document.getElementById('apiResults');
+            
+            if (!authToken) {
+                resultDiv.innerHTML = '<p class="error">❌ Please login first!</p>';
+                return;
+            }
+
+            try {
+                resultDiv.innerHTML += `<p>Testing ${name}...</p>`;
+                
+                const response = await fetch(`http://localhost:5000${endpoint}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+                
+                console.log(`${name} response:`, data);
+                
+                if (data.success) {
+                    resultDiv.innerHTML += `
+                        <div style="margin: 10px 0;">
+                            <h3 class="success">✅ ${name}</h3>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML += `
+                        <div style="margin: 10px 0;">
+                            <h3 class="error">❌ ${name}</h3>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML += `
+                    <div style="margin: 10px 0;">
+                        <h3 class="error">❌ ${name} Error</h3>
+                        <pre>${error.message}</pre>
+                    </div>
+                `;
+                console.error(`${name} error:`, error);
+            }
+        }
+    </script>
+</body>
+</html>

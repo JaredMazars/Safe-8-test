@@ -15,6 +15,7 @@ const AssessmentQuestions = ({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [startTime] = useState(Date.now());
 
   // Load questions from API when component mounts
   useEffect(() => {
@@ -168,7 +169,7 @@ const AssessmentQuestions = ({
       risk_assessment: [],
       service_recommendations: [],
       gap_analysis: [],
-      completion_time_ms: Date.now(),
+      completion_time_ms: Date.now() - startTime,
       metadata: {
         questions_count: questions.length,
         completed_at: new Date().toISOString()

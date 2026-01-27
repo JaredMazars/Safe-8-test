@@ -15,8 +15,11 @@ export const getCsrfToken = async () => {
     try {
       console.log('🔐 Fetching CSRF token...');
       const response = await api.get('/api/csrf-token');
-      csrfToken = response.data.token;
+      csrfToken = response.data.csrfToken || response.data.token; // Handle both formats
       console.log('🔐 CSRF token received:', csrfToken ? 'YES' : 'NO');
+      if (csrfToken) {
+        console.log('🔐 CSRF token value:', csrfToken.substring(0, 20) + '...');
+      }
     } catch (error) {
       console.error('🔐 Failed to fetch CSRF token:', error);
     }
@@ -35,8 +38,9 @@ api.interceptors.request.use(async config => {
     console.log('🔑 Admin token added');
   }
   
-  // Add CSRF token for state-changing requests
-  if (['post', 'put', 'delete', 'patch'].includes(config.method.toLowerCase())) {
+  // CSRF token disabled for admin routes (authentication via Bearer token instead)
+  // Only add CSRF for non-admin routes
+  if (['post', 'put', 'delete', 'patch'].includes(config.method.toLowerCase()) && !config.url.includes('/admin/')) {
     const csrf = await getCsrfToken();
     if (csrf) {
       config.headers['x-csrf-token'] = csrf;

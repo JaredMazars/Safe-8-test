@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import compression from 'compression';
 import { generateToken, doubleCsrfProtection, cookieParser } from './middleware/csrf.js';
+import database from './config/database.js';
 import './services/emailService.js'; // Initialize email service
 import { connectRedis } from './config/redis.js';
 import responseRouter from './routes/response.js';
@@ -104,10 +105,22 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // ✅ CSRF token endpoint (must be before CSRF protection)
 app.get('/api/csrf-token', (req, res) => {
   console.log('🔐 CSRF token requested');
-  const token = generateToken(req, res);
-  console.log('🔐 CSRF token generated:', token ? 'SUCCESS' : 'FAILED');
-  console.log('🔐 Cookies set:', res.getHeaders()['set-cookie']);
-  res.json({ token });
+  try {
+    // generateToken from csrf-csrf expects (req, res) and sets the secret cookie automatically
+    const token = generateToken(req, res);
+    console.log('🔐 CSRF token generated successfully');
+    // Also set a readable cookie for the client to access
+    res.cookie('x-csrf-token', token, {
+      sameSite: 'lax',
+      path: '/',
+      secure: false,
+      httpOnly: false, // JavaScript needs to read this
+    });
+    res.json({ csrfToken: token });
+  } catch (error) {
+    console.error('❌ Error generating CSRF token:', error);
+    res.status(500).json({ error: 'Failed to generate CSRF token' });
+  }
 });
 
 // ✅ Apply general API rate limiting
@@ -117,6 +130,59 @@ console.log('✅ Rate limiting enabled');
 // ✅ Apply strict rate limiting to authentication endpoints
 app.use('/api/admin/login', authLimiter);
 app.use('/api/lead/login', authLimiter);
+
+// Public API endpoint for industries (used by welcome screen)
+app.get('/api/industries', async (req, res) => {
+  try {
+    // Default industries that are always available
+    const defaultIndustries = [
+      { id: 'default-1', name: 'Financial Services', is_active: true },
+      { id: 'default-2', name: 'Technology', is_active: true },
+      { id: 'default-3', name: 'Healthcare', is_active: true },
+      { id: 'default-4', name: 'Manufacturing', is_active: true },
+      { id: 'default-5', name: 'Retail & E-commerce', is_active: true },
+      { id: 'default-6', name: 'Energy & Utilities', is_active: true },
+      { id: 'default-7', name: 'Government', is_active: true },
+      { id: 'default-8', name: 'Education', is_active: true },
+      { id: 'default-9', name: 'Professional Services', is_active: true },
+      { id: 'default-10', name: 'Other', is_active: true }
+    ];
+
+    // Get custom industries from database
+    const sql = `
+      SELECT id, name, is_active 
+      FROM industries 
+      WHERE is_active = 1 
+      ORDER BY name ASC
+    `;
+    const result = await database.query(sql);
+    const customIndustries = Array.isArray(result) ? result : [];
+
+    // Combine defaults + custom, with 'Other' always at the end
+    const allIndustries = [...defaultIndustries, ...customIndustries].sort((a, b) => {
+      if (a.name === 'Other') return 1;
+      if (b.name === 'Other') return -1;
+      return a.name.localeCompare(b.name);
+    });
+
+    res.json(allIndustries);
+  } catch (error) {
+    console.error('Error fetching industries:', error);
+    // Return defaults even if database fails
+    res.json([
+      { id: 'default-1', name: 'Financial Services', is_active: true },
+      { id: 'default-2', name: 'Technology', is_active: true },
+      { id: 'default-3', name: 'Healthcare', is_active: true },
+      { id: 'default-4', name: 'Manufacturing', is_active: true },
+      { id: 'default-5', name: 'Retail & E-commerce', is_active: true },
+      { id: 'default-6', name: 'Energy & Utilities', is_active: true },
+      { id: 'default-7', name: 'Government', is_active: true },
+      { id: 'default-8', name: 'Education', is_active: true },
+      { id: 'default-9', name: 'Professional Services', is_active: true },
+      { id: 'default-10', name: 'Other', is_active: true }
+    ]);
+  }
+});
 
 // Mount routes
 app.use('/api/lead', leadRouter);

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
@@ -18,6 +18,82 @@ const WelcomeScreen = ({
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [assessmentCards, setAssessmentCards] = useState([]);
+  const [loadingCards, setLoadingCards] = useState(true);
+
+  // Default fallback cards - ALWAYS shown
+  const defaultCards = [
+    {
+      type: 'core',
+      title: 'Core Assessment',
+      description: '',
+      duration: '25 questions • ~5 minutes',
+      icon: 'fas fa-rocket',
+      features: ['AI strategy alignment', 'Governance essentials', 'Basic readiness factors'],
+      audience: 'Executives & Leaders',
+      audienceColor: 'green'
+    },
+    {
+      type: 'advanced',
+      title: 'Advanced Assessment',
+      description: '',
+      duration: '45 questions • ~9 minutes',
+      icon: 'fas fa-cogs',
+      features: ['Technical infrastructure', 'Data pipeline maturity', 'Advanced capabilities'],
+      audience: 'CIOs & Technical Leaders',
+      audienceColor: 'blue'
+    },
+    {
+      type: 'frontier',
+      title: 'Frontier Assessment',
+      description: '',
+      duration: '60 questions • ~12 minutes',
+      icon: 'fas fa-brain',
+      features: ['Next-gen capabilities', 'Multi-agent orchestration', 'Cutting-edge readiness'],
+      audience: 'AI Centers of Excellence',
+      audienceColor: 'purple'
+    },
+    {
+      type: 'test',
+      title: 'Test Assessment',
+      description: '',
+      duration: '20 questions • ~4 minutes',
+      icon: 'fas fa-flask',
+      features: ['QA automation maturity', 'Testing infrastructure', 'Quality metrics tracking'],
+      audience: 'QA & Testing Teams',
+      audienceColor: 'orange'
+    }
+  ];
+
+  // Fetch assessment type configurations on mount
+  useEffect(() => {
+    const fetchAssessmentCards = async () => {
+      try {
+        const response = await api.get('/api/questions/assessment-types-config');
+        if (response.data.success && response.data.configs && response.data.configs.length > 0) {
+          // Filter out the default types and add any new custom types
+          const defaultTypes = ['core', 'advanced', 'frontier', 'test'];
+          const customCards = response.data.configs.filter(
+            card => !defaultTypes.includes(card.type.toLowerCase())
+          );
+          
+          // Always use hardcoded defaults + append custom cards
+          setAssessmentCards([...defaultCards, ...customCards]);
+        } else {
+          // Use default cards if no configs found
+          setAssessmentCards(defaultCards);
+        }
+      } catch (error) {
+        console.error('Error fetching assessment cards:', error);
+        // Use default cards on error
+        setAssessmentCards(defaultCards);
+      } finally {
+        setLoadingCards(false);
+      }
+    };
+
+    fetchAssessmentCards();
+  }, []);
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
@@ -249,55 +325,29 @@ const WelcomeScreen = ({
           <section className="assessment-selection">
             <h2 className="section-heading">Choose Your Assessment Level</h2>
             
-            <div className="assessment-grid">
-              <AssessmentCard
-                type="core"
-                title="Core Assessment"
-                duration="25 questions • ~5 minutes"
-                icon="fas fa-rocket"
-                features={[
-                  "AI strategy alignment",
-                  "Governance essentials", 
-                  "Basic readiness factors"
-                ]}
-                audience="Executives & Leaders"
-                audienceColor="green"
-                isSelected={selectedAssessmentType === 'core'}
-                onClick={() => onAssessmentTypeSelect('core')}
-              />
-              
-              <AssessmentCard
-                type="advanced"
-                title="Advanced Assessment"
-                duration="45 questions • ~9 minutes"
-                icon="fas fa-cogs"
-                features={[
-                  "Technical infrastructure",
-                  "Data pipeline maturity",
-                  "Advanced capabilities"
-                ]}
-                audience="CIOs & Technical Leaders"
-                audienceColor="blue"
-                isSelected={selectedAssessmentType === 'advanced'}
-                onClick={() => onAssessmentTypeSelect('advanced')}
-              />
-              
-              <AssessmentCard
-                type="frontier"
-                title="Frontier Assessment"
-                duration="60 questions • ~12 minutes"
-                icon="fas fa-brain"
-                features={[
-                  "Next-gen capabilities",
-                  "Multi-agent orchestration",
-                  "Cutting-edge readiness"
-                ]}
-                audience="AI Centers of Excellence"
-                audienceColor="purple"
-                isSelected={selectedAssessmentType === 'frontier'}
-                onClick={() => onAssessmentTypeSelect('frontier')}
-              />
-            </div>
+            {loadingCards ? (
+              <div style={{ textAlign: 'center', padding: '3rem' }}>
+                <i className="fas fa-spinner fa-spin" style={{ fontSize: '2rem', color: '#003087' }}></i>
+                <p style={{ marginTop: '1rem', color: '#666' }}>Loading assessment types...</p>
+              </div>
+            ) : (
+              <div className="assessment-grid">
+                {assessmentCards.map((card) => (
+                  <AssessmentCard
+                    key={card.type}
+                    type={card.type}
+                    title={card.title}
+                    duration={card.duration}
+                    icon={card.icon}
+                    features={card.features}
+                    audience={card.audience}
+                    audienceColor={card.audienceColor}
+                    isSelected={selectedAssessmentType === card.type}
+                    onClick={() => onAssessmentTypeSelect(card.type)}
+                  />
+                ))}
+              </div>
+            )}
             
             {/* Industry Selection */}
             {selectedAssessmentType && (

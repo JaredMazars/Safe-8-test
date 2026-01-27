@@ -2,8 +2,145 @@
 import express from 'express';
 import Response from '../models/Response.js';
 import Lead from '../models/Lead.js';
+import database from '../config/database.js';
 
 const responseRouter = express.Router();
+
+// GET assessment type configurations for home screen (PUBLIC)
+responseRouter.get('/assessment-types-config', async (req, res) => {
+  try {
+    // Default configurations for built-in types
+    const defaultConfigs = {
+      'CORE': {
+        type: 'core',
+        title: 'Core Assessment',
+        description: 'Essential AI readiness evaluation for leadership teams',
+        duration: '25 questions • ~5 minutes',
+        icon: 'fas fa-rocket',
+        features: ['AI strategy alignment', 'Governance essentials', 'Basic readiness factors'],
+        audience: 'Executives & Leaders',
+        audienceColor: 'green'
+      },
+      'ADVANCED': {
+        type: 'advanced',
+        title: 'Advanced Assessment',
+        description: 'Deep dive into technical capabilities and infrastructure',
+        duration: '45 questions • ~9 minutes',
+        icon: 'fas fa-cogs',
+        features: ['Technical infrastructure', 'Data pipeline maturity', 'Advanced capabilities'],
+        audience: 'CIOs & Technical Leaders',
+        audienceColor: 'blue'
+      },
+      'FRONTIER': {
+        type: 'frontier',
+        title: 'Frontier Assessment',
+        description: 'Cutting-edge AI capabilities and innovation readiness',
+        duration: '60 questions • ~12 minutes',
+        icon: 'fas fa-brain',
+        features: ['Next-gen capabilities', 'Multi-agent orchestration', 'Cutting-edge readiness'],
+        audience: 'AI Centers of Excellence',
+        audienceColor: 'purple'
+      },
+      'TEST': {
+        type: 'test',
+        title: 'Test Assessment',
+        description: 'Quality assurance and testing maturity evaluation',
+        duration: '20 questions • ~4 minutes',
+        icon: 'fas fa-flask',
+        features: ['QA automation maturity', 'Testing infrastructure', 'Quality metrics tracking'],
+        audience: 'QA & Testing Teams',
+        audienceColor: 'orange'
+      }
+    };
+
+    // Always get all types from questions table (source of truth)
+    const questionsSql = `
+      SELECT DISTINCT assessment_type
+      FROM assessment_questions
+      WHERE is_active = 1
+      ORDER BY assessment_type;
+    `;
+    const questionsResult = await database.query(questionsSql);
+    const allTypes = Array.isArray(questionsResult) ? questionsResult : questionsResult?.recordset || [];
+
+    // Check if config table exists
+    const tableCheckSql = `
+      SELECT COUNT(*) as count
+      FROM INFORMATION_SCHEMA.TABLES 
+      WHERE TABLE_NAME = 'assessment_types_config'
+    `;
+    const tableCheck = await database.query(tableCheckSql);
+    const tableExists = (tableCheck?.recordset || tableCheck)[0]?.count > 0;
+
+    let configMap = {};
+
+    if (tableExists) {
+      // Get config data for types that have it
+      const configSql = `
+        SELECT 
+          assessment_type,
+          title,
+          description,
+          duration,
+          icon,
+          features,
+          audience,
+          audience_color,
+          display_order
+        FROM assessment_types_config
+        WHERE is_active = 1
+        ORDER BY display_order, assessment_type;
+      `;
+      const configResult = await database.query(configSql);
+      const configs = configResult?.recordset || configResult;
+      
+      // Build a map of configs by assessment type
+      if (Array.isArray(configs)) {
+        configs.forEach(c => {
+          configMap[c.assessment_type] = {
+            type: c.assessment_type.toLowerCase(),
+            title: c.title,
+            description: c.description,
+            duration: c.duration,
+            icon: c.icon,
+            features: c.features ? JSON.parse(c.features) : [],
+            audience: c.audience,
+            audienceColor: c.audience_color
+          };
+        });
+      }
+    }
+
+    // Build final configs array - for each type in questions, use config if available, then default, then generic
+    const finalConfigs = allTypes.map(typeRow => {
+      const type = typeRow.assessment_type;
+      
+      // Priority: 1. Database config, 2. Hardcoded default, 3. Generic fallback
+      return configMap[type] || defaultConfigs[type] || {
+        type: type.toLowerCase(),
+        title: `${type} Assessment`,
+        description: '',
+        duration: '~10 minutes',
+        icon: 'fas fa-clipboard-check',
+        features: ['Comprehensive evaluation'],
+        audience: 'All Users',
+        audienceColor: 'blue'
+      };
+    });
+    
+    res.json({
+      success: true,
+      configs: finalConfigs
+    });
+  } catch (error) {
+    console.error('❌ Error getting assessment type configs:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch assessment type configurations',
+      configs: []
+    });
+  }
+});
 
 // GET all assessment questions
 responseRouter.get('/questions/:type', async (req, res) => {

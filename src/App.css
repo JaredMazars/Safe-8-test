@@ -4223,6 +4223,38 @@ select.field-input {
    LOGOUT BUTTON & LOADING STATES
    ======================================== */
 
+/* Back to Home Button */
+.btn-back-home {
+  background: var(--fm-primary);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 2px 6px rgba(0, 48, 135, 0.2);
+}
+
+.btn-back-home:hover {
+  background: #00255a;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 48, 135, 0.3);
+}
+
+.btn-back-home:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(0, 48, 135, 0.2);
+}
+
+.btn-back-home i {
+  font-size: 0.875rem;
+}
+
 /* Logout Button */
 .btn-logout {
   background: var(--fm-secondary);
@@ -5672,6 +5704,9 @@ select.field-input {
 .industry-actions {
   display: flex;
   gap: 0.5rem;
+  align-items: center;
+  position: relative;
+  z-index: 10;
 }
 
 .btn-icon {
@@ -5682,17 +5717,41 @@ select.field-input {
   color: var(--fm-gray);
   border-radius: 4px;
   transition: all 0.2s ease;
-  font-size: 0.9rem;
+  font-size: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
+  position: relative;
+  z-index: 10;
+}
+
+.btn-icon i {
+  pointer-events: none;
+  font-size: 1.1rem;
+  line-height: 1;
 }
 
 .btn-icon:hover {
   background: var(--fm-primary);
   color: white;
+  transform: scale(1.1);
+}
+
+.btn-icon.btn-danger {
+  color: var(--error-red) !important;
+  font-weight: bold;
+}
+
+.btn-icon.btn-danger i {
+  font-size: 1.2rem;
 }
 
 .btn-icon.btn-danger:hover {
-  background: var(--error-red);
-  color: white;
+  background: var(--error-red) !important;
+  color: white !important;
+  transform: scale(1.15);
 }
 
 .edit-industry input {
@@ -5702,6 +5761,14 @@ select.field-input {
   font-size: 0.95rem;
   width: 100%;
   font-family: inherit;
+}
+
+.assessment-type-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  position: relative;
+  z-index: 10;
 }
 
 .no-data {

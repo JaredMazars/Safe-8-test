@@ -11,9 +11,10 @@ import AdminLogin from './components/AdminLogin'
 import AdminDashboard from './components/AdminDashboard'
 import ForgotPassword from './components/ForgotPassword'
 import ResetPassword from './components/ResetPassword'
-import { INDUSTRIES } from './config/api'
+import api from './services/api'
 
 function App() {
+  const [industries, setIndustries] = useState([])
   const [selectedAssessmentType, setSelectedAssessmentType] = useState(
     () => sessionStorage.getItem('assessmentType') || null
   )
@@ -72,6 +73,36 @@ function App() {
     }
   }, [assessmentResults])
 
+  // Load industries from API
+  useEffect(() => {
+    const loadIndustries = async () => {
+      try {
+        const response = await api.get('/api/industries')
+        if (response.data && Array.isArray(response.data)) {
+          // Extract just the industry names
+          const industryNames = response.data.map(ind => ind.name)
+          setIndustries(industryNames)
+        }
+      } catch (error) {
+        console.error('Error loading industries:', error)
+        // Fallback to defaults if API fails
+        setIndustries([
+          'Financial Services',
+          'Technology',
+          'Healthcare',
+          'Manufacturing',
+          'Retail & E-commerce',
+          'Energy & Utilities',
+          'Government',
+          'Education',
+          'Professional Services',
+          'Other'
+        ])
+      }
+    }
+    loadIndustries()
+  }, [])
+
   const handleLogin = (loginData) => {
     setUserData(loginData.user)
     setUserId(loginData.user.id)
@@ -111,7 +142,7 @@ function App() {
         path="/" 
         element={
           <WelcomeScreen
-            industries={INDUSTRIES}
+            industries={industries}
             selectedAssessmentType={selectedAssessmentType}
             selectedIndustry={selectedIndustry}
             onAssessmentTypeSelect={setSelectedAssessmentType}
