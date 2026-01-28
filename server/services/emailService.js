@@ -696,7 +696,7 @@ export const sendPasswordResetEmail = async (userData) => {
                       This password reset email was sent to ${userData.contact_name} at ${userData.company_name || 'your organization'}.
                     </p>
                     <p style="margin: 0 0 8px 0; font-family: Arial, sans-serif; font-size: 12px; color: #666666; line-height: 1.5;">
-                      Email esent to: <a href="mailto:${userData.email}" style="color: #00539F; text-decoration: none;">${userData.email}</a>
+                      Email sent to: <a href="mailto:${userData.email}" style="color: #00539F; text-decoration: none;">${userData.email}</a>
                     </p>
                     <p style="margin: 15px 0 0 0; font-family: Arial, sans-serif; font-size: 11px; color: #999999; line-height: 1.5;">
                       © ${new Date().getFullYear()} Forvis Mazars. All rights reserved. Forvis Mazars South Africa is registered in South Africa.
