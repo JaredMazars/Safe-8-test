@@ -30,6 +30,9 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || process.env.WEBSITES_PORT || 8080;
 
+// Trust proxy for Azure App Service
+app.set('trust proxy', 1);
+
 // ✅ Rate Limiting Configuration
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -59,7 +62,8 @@ const allowedOrigins = [
   'http://localhost:3001',
   'http://localhost:5173',
   'http://localhost:5174',
-  process.env.CORS_ORIGIN // Azure frontend URL
+  'https://safe-8-assessment-d8cdftfveefggkgu.canadacentral-01.azurewebsites.net',
+  process.env.CORS_ORIGIN // Additional CORS origin from env
 ].filter(Boolean);
 
 // Middleware
@@ -89,22 +93,33 @@ if (process.env.NODE_ENV === 'production') {
 // ✅ Secure CORS setup
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl)
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Allow requests with no origin (like mobile apps, curl, same-origin)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       console.log(`⚠️ CORS blocked origin: ${origin}`);
-      // ✅ FIXED: Reject unauthorized origins in production
+      // In production, allow same domain requests
       if (process.env.NODE_ENV === 'production') {
-        callback(new Error('Not allowed by CORS'));
+        // Allow same-origin requests in production
+        const requestHost = origin.replace(/^https?:\/\//, '');
+        const serverHost = process.env.WEBSITE_HOSTNAME || 'safe-8-assessment-d8cdftfveefggkgu.canadacentral-01.azurewebsites.net';
+        if (requestHost === serverHost) {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
       } else {
         callback(null, true); // Allow all in development only
       }
     }
   },
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // restrict methods
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token'], // ✅ Added CSRF header
-  credentials: true // only if you need cookies/auth headers
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token'],
+  credentials: true
 }));
 
 // ✅ Cookie parser for CSRF tokens

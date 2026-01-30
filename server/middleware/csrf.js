@@ -12,32 +12,32 @@ const csrfSetup = doubleCsrf({
     }
     return process.env.CSRF_SECRET;
   },
-  cookieName: 'csrf-secret', // Cookie that stores the secret (removed __Host- prefix for localhost)
+  cookieName: 'csrf-secret',
   cookieOptions: {
     sameSite: 'lax',
     path: '/',
-    secure: false, // Set to true in production with HTTPS
-    httpOnly: true, // Secret cookie should be httpOnly
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
   },
   size: 64,
   ignoredMethods: ['GET', 'HEAD', 'OPTIONS'],
+  getSessionIdentifier: (req) => {
+    // Return session identifier from request
+    return req.sessionID || req.ip || 'anonymous';
+  },
   getTokenFromRequest: (req) => {
-    // Check header first, then body, then cookie
     const headerToken = req.headers['x-csrf-token'];
     const bodyToken = req.body?._csrf;
     const cookieToken = req.cookies?.['x-csrf-token'];
     
     const token = headerToken || bodyToken || cookieToken;
     
-    console.log('🔐 CSRF Token Check:', {
+    console.log('CSRF Token Check:', {
       hasHeader: !!headerToken,
       hasBody: !!bodyToken,
       hasCookie: !!cookieToken,
-      tokenValue: token ? token.substring(0, 20) + '...' : 'NONE',
       method: req.method,
-      url: req.url,
-      cookies: Object.keys(req.cookies || {}),
-      hasSecretCookie: !!req.cookies?.['csrf-secret']
+      url: req.url
     });
     
     return token;
@@ -49,15 +49,24 @@ const { generateCsrfToken: libGenerateToken, doubleCsrfProtection } = csrfSetup;
 
 // Wrapper to set both cookies
 const generateCsrfToken = (req, res) => {
-  // Call the library's generateCsrfToken function
-  const token = libGenerateToken(req, res);
-  
-  // Also set a readable cookie for the client
-  res.cookie('x-csrf-token', token, {
-    sameSite: 'lax',
-    path: '/',
-    secure: false,
-    httpOnly: false, // JavaScript needs to read this
+  try {
+    // Call the library's generateCsrfToken function
+    const token = libGenerateToken(req, res);
+    
+    // Also set a readable cookie for the client
+    res.cookie('x-csrf-token', token, {
+      sameSite: 'lax',
+      path: '/',
+      secure: process.env.NODE_ENV === 'production',
+      httpOnly: false, // JavaScript needs to read this
+    });
+    
+    return token;
+  } catch (error) {
+    console.error('Error generating CSRF token:', error);
+    throw error;
+  }
+};
   });
   
   return token;
