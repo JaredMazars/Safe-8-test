@@ -242,6 +242,18 @@ const WelcomeScreen = ({
 
           <div className="header-content">
             <h1 className="hero-title">SAFE-8 AI Readiness Framework</h1>
+            
+            {/* Mobile-only Login Button - appears after title */}
+            {!userData && (
+              <button
+                onClick={() => setShowLoginForm(!showLoginForm)}
+                className="btn-login-toggle-mobile"
+              >
+                <i className="fas fa-sign-in-alt"></i>
+                {showLoginForm ? 'Cancel' : 'Login'}
+              </button>
+            )}
+            
             {userData ? (
               <p className="hero-subtitle">Welcome back, {userData.contact_name || userData.contactName}! Ready to take another assessment?</p>
             ) : (
