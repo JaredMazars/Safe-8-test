@@ -48,7 +48,7 @@ foreach ($instance in $instances) {
         
         # Get SQL Server version
         $command = $connection.CreateCommand()
-        $command.CommandText = "SELECT @@VERSION"
+        $command.CommandText = 'SELECT @@VERSION'
         $version = $command.ExecuteScalar()
         
         $connection.Close()
@@ -59,7 +59,7 @@ foreach ($instance in $instances) {
         # Check if SAFE8_Local exists
         $connection.Open()
         $command = $connection.CreateCommand()
-        $command.CommandText = "SELECT COUNT(*) FROM sys.databases WHERE name = 'SAFE8_Local'"
+        $command.CommandText = 'SELECT COUNT(*) FROM sys.databases WHERE name = ''SAFE8_Local'''
         $dbExists = $command.ExecuteScalar()
         $connection.Close()
         
@@ -71,11 +71,11 @@ foreach ($instance in $instances) {
             $connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
             $connection.Open()
             $command = $connection.CreateCommand()
-            $command.CommandText = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'"
+            $command.CommandText = 'SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = ''BASE TABLE'''
             $tableCount = $command.ExecuteScalar()
             
             # Get admin count
-            $command.CommandText = "SELECT COUNT(*) FROM admin_users"
+            $command.CommandText = 'SELECT COUNT(*) FROM admin_users'
             $adminCount = $command.ExecuteScalar()
             
             $connection.Close()
@@ -132,10 +132,10 @@ EMAIL_USER=your-email@gmail.com
 EMAIL_PASSWORD=your-app-password
 "@
 
-    $envPath = Join-Path (Get-Location) ".env.local"
+    $envPath = Join-Path (Get-Location) '.env.local'
     $envContent | Out-File -FilePath $envPath -Encoding UTF8
     
-    Write-Host "📝 Created .env.local file with recommended settings" -ForegroundColor Green
+    Write-Host "Created .env.local file with recommended settings" -ForegroundColor Green
     Write-Host "   Location: $envPath" -ForegroundColor Gray
     Write-Host ""
 } else {
