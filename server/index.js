@@ -40,6 +40,11 @@ const authLimiter = rateLimit({
   message: 'Too many login attempts from this IP, please try again after 15 minutes',
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => {
+    // Extract IP address without port number
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+    return ip.split(':').pop(); // Remove port if present
+  },
   handler: (req, res) => {
     res.status(429).json({
       success: false,
@@ -54,6 +59,11 @@ const apiLimiter = rateLimit({
   message: 'Too many requests from this IP, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => {
+    // Extract IP address without port number
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+    return ip.split(':').pop(); // Remove port if present
+  }
 });
 
 // ✅ CORS Configuration - Allow localhost and Azure
