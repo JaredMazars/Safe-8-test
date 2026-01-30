@@ -63,8 +63,28 @@ const allowedOrigins = [
 ].filter(Boolean);
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false
+}));
 app.use(morgan('common'));
+
+// ✅ Serve static frontend files in production (BEFORE other middleware)
+if (process.env.NODE_ENV === 'production') {
+  const distPath = path.join(__dirname, '..', 'dist');
+  app.use(express.static(distPath, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.js')) {
+        res.setHeader('Content-Type', 'application/javascript');
+      } else if (filePath.endsWith('.css')) {
+        res.setHeader('Content-Type', 'text/css');
+      } else if (filePath.endsWith('.html')) {
+        res.setHeader('Content-Type', 'text/html');
+      }
+    }
+  }));
+  console.log(`Serving static files from: ${distPath}`);
+}
 
 // ✅ Secure CORS setup
 app.use(cors({
@@ -103,13 +123,6 @@ if (process.env.NODE_ENV === 'production') {
 
 // ✅ Compression middleware for better performance (gzip)
 app.use(compression());
-
-// ✅ Serve static frontend files in production
-if (process.env.NODE_ENV === 'production') {
-  const distPath = path.join(__dirname, '..', 'dist');
-  app.use(express.static(distPath));
-  console.log(`📁 Serving static files from: ${distPath}`);
-}
 
 // ✅ Request size limits for DoS protection
 app.use(express.json({ limit: '10mb' }));
