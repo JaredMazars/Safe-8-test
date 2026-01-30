@@ -240,8 +240,8 @@ router.get('/users', authenticateAdmin, async (req, res) => {
     }
 
     // Exclude soft-deleted users (email starts with 'deleted_' or contact_name is 'DELETED USER')
-    whereConditions.push(`l.email NOT LIKE 'deleted_%'`);
-    whereConditions.push(`l.contact_name != 'DELETED USER'`);
+    whereConditions.push(`email NOT LIKE 'deleted_%'`);
+    whereConditions.push(`contact_name != 'DELETED USER'`);
 
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
@@ -3210,5 +3210,3 @@ router.delete('/config/pillars/:pillarId', authenticateAdmin, async (req, res) =
 });
 
 export default router;
-
-

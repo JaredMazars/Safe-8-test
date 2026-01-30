@@ -1277,17 +1277,42 @@ body {
 
   .welcome-header {
     padding: 1.5rem 1rem;
+    position: relative;
+  }
+
+  .welcome-logo {
+    position: absolute;
+    top: 1.5rem;
+    left: 1rem;
+    height: 35px;
+    z-index: 1;
   }
 
   .header-actions {
-    flex-direction: column;
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: flex-start;
     gap: 0.75rem;
+    margin-bottom: 2.5rem;
+    padding-top: 0;
+    padding-right: 0;
+    margin-left: auto;
+    position: relative;
+    z-index: 2;
   }
 
   .btn-admin,
-  .btn-login {
-    width: 100%;
+  .btn-login-toggle {
+    width: auto;
     justify-content: center;
+    font-size: 0.875rem;
+    padding: 0.65rem 1rem;
+    flex-shrink: 0;
+  }
+
+  .header-content {
+    margin-top: 3rem;
   }
 
   .hero-title {
@@ -3875,7 +3900,7 @@ select.field-input {
 
 .meta-label {
   font-size: 0.8rem;
-  color: var(--text-light);
+  color: var(--white);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 0.25rem;
@@ -3884,7 +3909,7 @@ select.field-input {
 .meta-value {
   font-size: 1rem;
   font-weight: 600;
-  color: var(--text-dark);
+  color: var(--white);
 }
 
 /* Insights Section */
@@ -5646,6 +5671,63 @@ select.field-input {
   font-size: 1.2rem;
   flex-shrink: 0;
   margin-top: 0.1rem;
+}
+
+/* Pillar Weight Controls */
+.weight-control {
+  background: #f9fafb;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s ease;
+}
+
+.weight-control:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+}
+
+.weight-control input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+}
+
+.weight-control input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #3b82f6;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.weight-control input[type="range"]::-webkit-slider-thumb:hover {
+  background: #2563eb;
+  transform: scale(1.1);
+}
+
+.weight-control input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #3b82f6;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.weight-control input[type="range"]::-moz-range-thumb:hover {
+  background: #2563eb;
+  transform: scale(1.1);
 }
 
 .info-box p {

@@ -30,14 +30,53 @@ assessmentRouter.post('/submit-complete', async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    if (!lead_id || !assessment_type || !overall_score) {
+    if (!lead_id || !assessment_type) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: lead_id, assessment_type, or overall_score'
+        message: 'Missing required fields: lead_id or assessment_type'
       });
     }
 
+    // Calculate weighted score using new method
+    const weightedResult = await Assessment.calculateWeightedScore(lead_id, assessment_type);
+    const { overall_score: calculated_score, dimension_scores, weights_applied } = weightedResult;
+
+    // Use calculated score or fallback to provided score
+    const final_overall_score = calculated_score || parseFloat(overall_score) || 0;
+
+    // Generate enhanced insights with weighted priorities
+    const enhancedInsights = Assessment.generateInsights(
+      final_overall_score, 
+      dimension_scores, 
+      assessment_type
+    );
+
     // Prepare assessment data
+    const assessmentData = {
+      lead_id: parseInt(lead_id),
+      assessment_type: assessment_type.toUpperCase(),
+      industry: industry || 'Unknown',
+      overall_score: final_overall_score,
+      dimension_scores: dimension_scores || pillar_scores || [],
+      responses: responses || {},
+      insights: {
+        ...enhancedInsights,
+        score_category: final_overall_score >= 80 ? 'AI Leader' : 
+                       final_overall_score >= 60 ? 'AI Adopter' : 
+                       final_overall_score >= 40 ? 'AI Explorer' : 'AI Starter',
+        completion_date: new Date().toISOString(),
+        total_score: final_overall_score,
+        completion_time_ms: completion_time_ms || 0,
+        weights_applied,
+        risk_assessment: risk_assessment || [],
+        service_recommendations: service_recommendations || [],
+        gap_analysis: gap_analysis || [],
+        industry_benchmark: getBenchmarkForIndustry(industry),
+        metadata: metadata || {}
+      }
+    };
+
+    /* LEGACY SUBMISSION LOGIC (BACKUP):
     const assessmentData = {
       lead_id: parseInt(lead_id),
       assessment_type: assessment_type.toUpperCase(),
@@ -59,6 +98,7 @@ assessmentRouter.post('/submit-complete', async (req, res) => {
         metadata: metadata || {}
       }
     };
+    */
 
     // Use updateOrCreate to handle duplicate assessments
     const result = await Assessment.updateOrCreate(assessmentData);

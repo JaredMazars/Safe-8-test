@@ -35,33 +35,6 @@ const AssessmentResults = ({
   const [error, setError] = useState(null);
   const { score } = results || { score: 0 };
 
-  // Industry benchmarks data
-  const industryBenchmarks = {
-    "financial-services": { average: 65, bestPractice: 85 },
-    "healthcare": { average: 55, bestPractice: 78 },
-    "manufacturing": { average: 60, bestPractice: 82 },
-    "retail": { average: 62, bestPractice: 80 },
-    "technology": { average: 75, bestPractice: 90 },
-    "telecommunications": { average: 68, bestPractice: 85 },
-    "automotive": { average: 58, bestPractice: 79 },
-    "energy": { average: 52, bestPractice: 75 },
-    "real-estate": { average: 45, bestPractice: 70 },
-    "transportation": { average: 50, bestPractice: 72 },
-    "media": { average: 63, bestPractice: 81 },
-    "education": { average: 48, bestPractice: 68 },
-    "government": { average: 42, bestPractice: 65 },
-    "professional-services": { average: 58, bestPractice: 76 },
-    "hospitality": { average: 47, bestPractice: 69 },
-    "agriculture": { average: 40, bestPractice: 62 },
-    "mining": { average: 46, bestPractice: 67 },
-    "aerospace": { average: 61, bestPractice: 78 },
-    "insurance": { average: 64, bestPractice: 83 },
-    "pharmaceuticals": { average: 56, bestPractice: 77 },
-    "chemicals": { average: 53, bestPractice: 74 },
-    "non-profit": { average: 38, bestPractice: 58 },
-    "other": { average: 55, bestPractice: 75 }
-  };
-
   // Load dimension scores from assessment results
   useEffect(() => {
     const loadDimensionScores = async () => {
@@ -112,19 +85,17 @@ const AssessmentResults = ({
     loadDimensionScores();
   }, [userId, assessmentType, score]);
 
-  // Get current industry benchmark
-  const getCurrentBenchmark = () => {
-    const industryKey = industry?.toLowerCase().replace(/\s+/g, '-') || 'technology';
-    return industryBenchmarks[industryKey] || industryBenchmarks['technology'];
-  };
-
   // Create radar chart data
   const createRadarChartData = () => {
     const labels = dimensionScores.map(dim => dim.pillar_name || dim.dimension_name);
     const userScores = dimensionScores.map(dim => Math.round(dim.score));
-    const benchmark = getCurrentBenchmark();
-    const bestPractice = labels.map(() => benchmark.bestPractice);
-    const industryAverage = labels.map(() => benchmark.average);
+    
+    // Hardcoded benchmark values
+    const avgScore = 60;
+    const bestScore = 80;
+    
+    const bestPractice = labels.map(() => bestScore);
+    const industryAverage = labels.map(() => avgScore);
 
     return {
       labels: labels,
@@ -169,10 +140,10 @@ const AssessmentResults = ({
   // Generate gap analysis
   const generateGapAnalysis = () => {
     const gaps = [];
-    const benchmark = getCurrentBenchmark();
+    const bestScore = 80;
     
     dimensionScores.forEach((dimension) => {
-      const gap = benchmark.bestPractice - Math.round(dimension.score);
+      const gap = bestScore - Math.round(dimension.score);
       if (gap > 0) {
         let severity, priority;
         
@@ -283,12 +254,7 @@ const AssessmentResults = ({
   };
 
   const getBenchmarkComparison = () => {
-    const benchmark = getCurrentBenchmark();
-    
-    if (score >= benchmark.bestPractice) return 'Top 10% of industry';
-    if (score >= benchmark.average) return 'Above industry average';
-    if (score >= benchmark.average * 0.8) return 'Near industry average';
-    return 'Below industry average';
+    return 'Industry benchmark data will be available soon';
   };
 
   const overallStatus = getOverallStatus();
@@ -427,7 +393,7 @@ const AssessmentResults = ({
                     <div className="gap-details">
                       <h4 className="gap-pillar">{gap.pillar}</h4>
                       <p className="gap-info">
-                        Current: {gap.score}% | Best Practice: {getCurrentBenchmark().bestPractice}% | Gap: {gap.gap} points
+                        Current: {gap.score}% | Best Practice: 80% | Gap: {gap.gap} points
                       </p>
                       <span className="gap-badge">{gap.severity} Priority</span>
                     </div>
