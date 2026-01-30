@@ -110,6 +110,7 @@ router.post('/login', validateAdminLogin, async (req, res) => {
     const userAgent = req.headers['user-agent'];
 
     console.log('🔐 Admin login attempt:', username);
+    console.log('IP:', ipAddress, 'User-Agent:', userAgent);
 
     const result = await Admin.authenticate(username, password, ipAddress, userAgent);
 
@@ -121,10 +122,15 @@ router.post('/login', validateAdminLogin, async (req, res) => {
       res.status(401).json(result);
     }
   } catch (error) {
-    console.error('❌ Login error:', error);
+    console.error('❌ Login error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code
+    });
     res.status(500).json({
       success: false,
-      message: 'Login error'
+      message: 'Login error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
