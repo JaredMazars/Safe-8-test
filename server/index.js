@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
-import helmet from 'helmet';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const helmet = require('helmet');
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
