@@ -36,7 +36,14 @@ cd "$DEPLOYMENT_TARGET"
 echo ""
 echo "==> Building frontend..."
 if [ -f "package.json" ]; then
-    npm ci --prefer-offline --no-audit --loglevel=error 2>&1 | grep -E '(added|removed|ERR!)' || npm install --loglevel=error
+    # Fix for rollup optional dependency bug
+    echo "Cleaning dependencies to fix rollup issue..."
+    rm -rf node_modules package-lock.json
+    
+    echo "Installing dependencies..."
+    npm install --legacy-peer-deps --loglevel=error
+    
+    echo "Building frontend..."
     npm run build
     echo "✓ Frontend built successfully"
 else
